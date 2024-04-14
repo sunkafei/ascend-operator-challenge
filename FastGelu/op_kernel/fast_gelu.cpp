@@ -1,4 +1,5 @@
 #include "kernel_operator.h"
+#include <iostream>
 using namespace AscendC;
 constexpr int32_t BUFFER_NUM = 2;                                     // tensor num for each queue
 

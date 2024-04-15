@@ -1,22 +1,26 @@
 #include "kernel_operator.h"
-#include <iostream>
 using namespace AscendC;
 constexpr int32_t BUFFER_NUM = 2;                                     // tensor num for each queue
 
 class KernelFastGelu {
 public:
     __aicore__ inline KernelFastGelu() {}
-    __aicore__ inline void Init(GM_ADDR x, GM_ADDR y, uint32_t totalLength, uint32_t tileNum)
+    __aicore__ inline void Init(GM_ADDR x, GM_ADDR y, uint32_t totalLength, uint32_t ALIGN_NUM, uint32_t block_size, uint32_t core_size, uint32_t core_remain)
     {
         ASSERT(GetBlockNum() != 0 && "block dim can not be zero!");
-        this->blockLength = totalLength / GetBlockNum();
-        this->tileNum = tileNum;
-        ASSERT(tileNum != 0 && "tile num can not be zero!");
-        this->tileLength = this->blockLength / tileNum / BUFFER_NUM;
+        this->blockLength = core_size + (GetBlockIdx() < core_remain);
+        this->tileLength = block_size;
+        this->blockLength = this->blockLength + (this->blockLength % ALIGN_NUM ? ALIGN_NUM - this->blockLength % ALIGN_NUM : 0);
+
+        auto startPointer = this->blockLength * GetBlockIdx() + (GetBlockIdx() < core_remain ? GetBlockIdx() : core_remain);
+        auto bufferlength = this->blockLength;
 
         // get start index for current core, core parallel
-        xGm.SetGlobalBuffer((__gm__ DTYPE_X*)x + this->blockLength * GetBlockIdx(), this->blockLength);
-        yGm.SetGlobalBuffer((__gm__ DTYPE_Y*)y + this->blockLength * GetBlockIdx(), this->blockLength);
+        xGm.SetGlobalBuffer((__gm__ DTYPE_X*)x + startPointer, bufferlength);
+        yGm.SetGlobalBuffer((__gm__ DTYPE_Y*)y + startPointer, bufferlength);
+
+        this->tileNum = this->blockLength / this->tileLength + (this->blockLength % this->tileLength > 0);
+
         // pipe alloc memory to queue, the unit is Bytes
         pipe.InitBuffer(inQueueX, BUFFER_NUM, this->tileLength * sizeof(DTYPE_X));
         pipe.InitBuffer(outQueueY, BUFFER_NUM, this->tileLength * sizeof(DTYPE_Y));
@@ -25,7 +29,7 @@ public:
     __aicore__ inline void Process()
     {
         // loop count need to be doubled, due to double buffer
-        int32_t loopCount = this->tileNum * BUFFER_NUM;
+        int32_t loopCount = this->tileNum;
         // tiling strategy, pipeline parallel
         for (int32_t i = 0; i < loopCount; i++) {
             CopyIn(i);
@@ -37,10 +41,14 @@ public:
 private:
     __aicore__ inline void CopyIn(int32_t progress)
     {
+        auto length = this->tileLength;
+        if(progress + 1 == this->tileNum){
+            length = this->blockLength - this->tileLength * progress;
+        }
         // alloc tensor from queue memory
         LocalTensor<DTYPE_X> xLocal = inQueueX.AllocTensor<DTYPE_X>();
         // copy progress_th tile from global tensor to local tensor
-        DataCopy(xLocal, xGm[progress * this->tileLength], this->tileLength);
+        DataCopy(xLocal, xGm[progress * this->tileLength], length);
         // enque input tensors to VECIN queue
         inQueueX.EnQue(xLocal);
     }
@@ -74,10 +82,14 @@ private:
     }
     __aicore__ inline void CopyOut(int32_t progress)
     {
+        auto length = this->tileLength;
+        if(progress + 1 == this->tileNum){
+            length = this->blockLength - this->tileLength * progress;
+        }
         // deque output tensor from VECOUT queue
         LocalTensor<DTYPE_Y> yLocal = outQueueY.DeQue<DTYPE_Y>();
         // copy progress_th tile from local tensor to global tensor
-        DataCopy(yGm[progress * this->tileLength], yLocal, this->tileLength);
+        DataCopy(yGm[progress * this->tileLength], yLocal, length);
         // free output tensor for reuse
         outQueueY.FreeTensor(yLocal);
     }
@@ -100,6 +112,6 @@ extern "C" __global__ __aicore__ void fast_gelu(GM_ADDR x, GM_ADDR y, GM_ADDR wo
     GET_TILING_DATA(tiling_data, tiling);
     // TODO: user kernel impl
     KernelFastGelu op;
-    op.Init(x, y, tiling_data.totalLength, tiling_data.tileNum);
+    op.Init(x, y, tiling_data.totalLength, tiling_data.ALIGN_NUM, tiling_data.block_size, tiling_data.core_size, tiling_data.core_remain);
     op.Process();
 }

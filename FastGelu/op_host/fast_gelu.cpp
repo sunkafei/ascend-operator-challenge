@@ -21,7 +21,7 @@ static ge::graphStatus TilingFunc(gert::TilingContext* context)
     auto dt = context->GetInputTensor(0)->GetDataType();
     if(dt == ge::DT_INT8){
         sizeofdatatype = 1;
-    }else if(dt == ge::DT_FLOAT16){
+    }else if(dt == ge::DT_FLOAT16 || ge::DT_BF16){
         sizeofdatatype = 2;
     }else{
         sizeofdatatype = 4;

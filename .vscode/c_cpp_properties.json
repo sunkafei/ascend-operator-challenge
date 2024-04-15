@@ -4,12 +4,15 @@
             "name": "Linux",
             "includePath": [
                 "${workspaceFolder}/**",
-                "/usr/local/Ascend/ascend-toolkit/8.0.RC1.alpha003/aarch64-linux/include"
+                "/usr/local/Ascend/ascend-toolkit/latest/aarch64-linux/include/**",
+                "/usr/local/Ascend/ascend-toolkit/latest/aarch64-linux/ccec_compiler/include/**",
+                "/usr/local/Ascend/ascend-toolkit/latest/include/**",
+                "/usr/local/Ascend/ascend-toolkit/latest/compiler/include/**"
             ],
             "defines": [],
             "compilerPath": "/usr/bin/gcc",
             "cStandard": "c17",
-            "cppStandard": "gnu++17",
+            "cppStandard": "c++17",
             "intelliSenseMode": "linux-gcc-arm64"
         }
     ],

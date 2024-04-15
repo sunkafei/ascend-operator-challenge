@@ -132,7 +132,7 @@ bool RunOp()
         ERROR_LOG("Set input data failed");
         return false;
     }
-
+    
     // Run op
     if (!opRunner.RunOp()) {
         ERROR_LOG("Run op failed");

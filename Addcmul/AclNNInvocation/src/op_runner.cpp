@@ -13,7 +13,18 @@
 #include <cassert>
 #include "acl/acl_op_compiler.h"
 #include "common.h"
-
+#include <iostream>
+#include <chrono>
+#include <set>
+struct Timer {
+	std::chrono::steady_clock::time_point start;
+	Timer() : start(std::chrono::steady_clock::now()) {}
+	~Timer() {
+		auto finish = std::chrono::steady_clock::now();
+		auto runtime = std::chrono::duration_cast<std::chrono::microseconds>(finish - start).count();
+		std::cerr << "\033[1;31mRuntime: " << runtime / 1e6 << "s\033[0m" << std::endl;
+	}
+};
 using namespace std;
 
 extern bool g_isDevice;
@@ -322,18 +333,20 @@ bool OpRunner::RunOp()
             ERROR_LOG("Malloc device memory failed");
         }
     }
+    {
+        Timer timer;
+        if (aclnnAddcmul(workspace, workspaceSize, handle, stream) != ACL_SUCCESS) {
+            (void)aclrtDestroyStream(stream);
+            ERROR_LOG("Execute Operator failed. error code is %d", static_cast<int32_t>(ret));
+            return false;
+        }
+        //INFO_LOG("Execute aclnnAddCustom success");
 
-    if (aclnnAddcmul(workspace, workspaceSize, handle, stream) != ACL_SUCCESS) {
-        (void)aclrtDestroyStream(stream);
-        ERROR_LOG("Execute Operator failed. error code is %d", static_cast<int32_t>(ret));
-        return false;
-    }
-	INFO_LOG("Execute aclnnAddCustom success");
-
-    if (aclrtSynchronizeStreamWithTimeout(stream, 5000) != SUCCESS) {
-        ERROR_LOG("Synchronize stream failed. error code is %d", static_cast<int32_t>(ret));
-        (void)aclrtDestroyStream(stream);
-        return false;
+        if (aclrtSynchronizeStreamWithTimeout(stream, 5000) != SUCCESS) {
+            ERROR_LOG("Synchronize stream failed. error code is %d", static_cast<int32_t>(ret));
+            (void)aclrtDestroyStream(stream);
+            return false;
+        }
     }
     INFO_LOG("Synchronize stream success");
 

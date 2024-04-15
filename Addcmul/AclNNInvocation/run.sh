@@ -80,7 +80,8 @@ function main {
     # 4. 运行可执行文件
     cd $CURRENT_DIR/output
     echo "INFO: execute op!"
-    msprof --application="execute_op" --output=./
+    #msprof --application="execute_op" --output=./ --aic-metrics=ArithmeticUtilization
+    ./execute_op
 
     if [ $? -ne 0 ]; then
         echo "ERROR: acl executable run failed! please check your project!"

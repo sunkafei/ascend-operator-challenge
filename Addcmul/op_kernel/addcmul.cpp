@@ -4,18 +4,20 @@ constexpr int32_t BUFFER_NUM = 2;                                     // tensor 
 class KernelAddcmul {
 public:
     __aicore__ inline KernelAddcmul() {}
-    __aicore__ inline void Init(GM_ADDR input_data, GM_ADDR x1, GM_ADDR x2, GM_ADDR value, GM_ADDR y, uint32_t totalLength, uint32_t tileNum) {
+    __aicore__ inline void Init(GM_ADDR input_data, GM_ADDR x1, GM_ADDR x2, GM_ADDR value, GM_ADDR y, uint32_t totalLength, uint32_t ALIGN_NUM, uint32_t block_size, uint32_t core_size, uint32_t core_remain) {
         ASSERT(GetBlockNum() != 0 && "block dim can not be zero!");
-        this->blockLength = totalLength / GetBlockNum();
-        this->tileNum = tileNum;
-        ASSERT(tileNum != 0 && "tile num can not be zero!");
-        this->tileLength = this->blockLength / tileNum / BUFFER_NUM;
+        this->blockLength = core_size + (GetBlockIdx() < core_remain);
+        this->tileLength = block_size;
+        this->blockLength = this->blockLength + (this->blockLength % ALIGN_NUM ? ALIGN_NUM - this->blockLength % ALIGN_NUM : 0);
 
-        Gm_input_data.SetGlobalBuffer((__gm__ DTYPE_INPUT_DATA*)input_data + this->blockLength * GetBlockIdx(), this->blockLength);
-        Gm_x1.SetGlobalBuffer((__gm__ DTYPE_X1*)x1 + this->blockLength * GetBlockIdx(), this->blockLength);
-        Gm_x2.SetGlobalBuffer((__gm__ DTYPE_X2*)x2 + this->blockLength * GetBlockIdx(), this->blockLength);
+        auto startPointer = this->blockLength * GetBlockIdx() + (GetBlockIdx() < core_remain ? GetBlockIdx() : core_remain);
+        this->tileNum = this->blockLength / this->tileLength + (this->blockLength % this->tileLength > 0);
+
+        Gm_input_data.SetGlobalBuffer((__gm__ DTYPE_INPUT_DATA*)input_data + startPointer, this->blockLength);
+        Gm_x1.SetGlobalBuffer((__gm__ DTYPE_X1*)x1 + startPointer, this->blockLength);
+        Gm_x2.SetGlobalBuffer((__gm__ DTYPE_X2*)x2 + startPointer, this->blockLength);
         Gm_value.SetGlobalBuffer((__gm__ DTYPE_VALUE*)value, 1);
-        Gm_y.SetGlobalBuffer((__gm__ DTYPE_Y*)y + this->blockLength * GetBlockIdx(), this->blockLength);
+        Gm_y.SetGlobalBuffer((__gm__ DTYPE_Y*)y + startPointer, this->blockLength);
         pipe.InitBuffer(Q_input_data, BUFFER_NUM, this->tileLength * sizeof(DTYPE_INPUT_DATA));
         pipe.InitBuffer(Q_x1, BUFFER_NUM, this->tileLength * sizeof(DTYPE_X1));
         pipe.InitBuffer(Q_x2, BUFFER_NUM, this->tileLength * sizeof(DTYPE_X2));
@@ -25,7 +27,7 @@ public:
         this->value = Gm_value.GetValue(0);
     }
     __aicore__ inline void Process() {
-        int32_t loopCount = this->tileNum * BUFFER_NUM;
+        int32_t loopCount = this->tileNum;
         for (int32_t i = 0; i < loopCount; i++) {
             CopyIn(i);
             Compute(i);
@@ -87,6 +89,6 @@ private:
 extern "C" __global__ __aicore__ void addcmul(GM_ADDR input_data, GM_ADDR x1, GM_ADDR x2, GM_ADDR value, GM_ADDR y, GM_ADDR workspace, GM_ADDR tiling) {
     GET_TILING_DATA(tiling_data, tiling);
     KernelAddcmul op;
-    op.Init(input_data, x1, x2, value, y, tiling_data.totalLength, tiling_data.tileNum);
+    op.Init(input_data, x1, x2, value, y, tiling_data.totalLength, tiling_data.ALIGN_NUM, tiling_data.block_size, tiling_data.core_size, tiling_data.core_remain);
     op.Process();
 }

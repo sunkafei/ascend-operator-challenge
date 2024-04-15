@@ -31,20 +31,20 @@ public:
         // loop count need to be doubled, due to double buffer
         int32_t loopCount = this->tileNum;
         // tiling strategy, pipeline parallel
-        for (int32_t i = 0; i < loopCount; i++) {
-            CopyIn(i);
-            Compute(i);
-            CopyOut(i);
+        for (int32_t i = 0; i < loopCount-1; i++) {
+            CopyIn(i, this->tileLength);
+            Compute(i, this->tileLength);
+            CopyOut(i, this->tileLength);
         }
+        auto length = this->blockLength - this->tileLength * (loopCount - 1);
+        CopyIn(loopCount - 1, length);
+        Compute(loopCount - 1, length);
+        CopyOut(loopCount - 1, length);
     }
 
 private:
-    __aicore__ inline void CopyIn(int32_t progress)
+    __aicore__ inline void CopyIn(int32_t progress, uint32_t length)
     {
-        auto length = this->tileLength;
-        if(progress + 1 == this->tileNum){
-            length = this->blockLength - this->tileLength * progress;
-        }
         // alloc tensor from queue memory
         LocalTensor<DTYPE_X> xLocal = inQueueX.AllocTensor<DTYPE_X>();
         // copy progress_th tile from global tensor to local tensor
@@ -52,7 +52,7 @@ private:
         // enque input tensors to VECIN queue
         inQueueX.EnQue(xLocal);
     }
-    __aicore__ inline void Compute(int32_t progress)
+    __aicore__ inline void Compute(int32_t progress, uint32_t length)
     {
         // deque input tensors from VECIN queue
         LocalTensor<DTYPE_X> xLocal = inQueueX.DeQue<DTYPE_X>();
@@ -63,29 +63,25 @@ private:
 
         // x*e^(0.851)*(x-|x|)/(1+e^(-1.702|x|))
 
-        Abs(tmp, xLocal, this->tileLength);
-        Muls(yLocal, tmp, c2, this->tileLength);
-        Exp(yLocal, yLocal, this->tileLength);
-        Adds(yLocal, yLocal, c3, this->tileLength);
+        Abs(tmp, xLocal, length);
+        Muls(yLocal, tmp, c2, length);
+        Exp(yLocal, yLocal, length);
+        Adds(yLocal, yLocal, c3, length);
 
-        Sub(tmp, xLocal, tmp, this->tileLength);
-        Muls(tmp, tmp, c1, this->tileLength);
-        Exp(tmp, tmp, this->tileLength);
+        Sub(tmp, xLocal, tmp, length);
+        Muls(tmp, tmp, c1, length);
+        Exp(tmp, tmp, length);
 
-        Div(yLocal, xLocal, yLocal, this->tileLength);
-        Mul(yLocal, tmp, yLocal, this->tileLength);
+        Div(yLocal, xLocal, yLocal, length);
+        Mul(yLocal, tmp, yLocal, length);
 
         // enque the output tensor to VECOUT queue
         outQueueY.EnQue<DTYPE_Y>(yLocal);
         // free input tensors for reuse
         inQueueX.FreeTensor(xLocal);
     }
-    __aicore__ inline void CopyOut(int32_t progress)
+    __aicore__ inline void CopyOut(int32_t progress, uint32_t length)
     {
-        auto length = this->tileLength;
-        if(progress + 1 == this->tileNum){
-            length = this->blockLength - this->tileLength * progress;
-        }
         // deque output tensor from VECOUT queue
         LocalTensor<DTYPE_Y> yLocal = outQueueY.DeQue<DTYPE_Y>();
         // copy progress_th tile from local tensor to global tensor

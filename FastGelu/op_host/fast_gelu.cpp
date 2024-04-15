@@ -9,6 +9,7 @@ const uint32_t BLOCK_SIZE = 32;
 static ge::graphStatus TilingFunc(gert::TilingContext* context)
 {
     FastGeluTilingData tiling;
+    constexpr int32_t NUM = 8;
     uint32_t sizeofdatatype;
     uint32_t totalLengthAligned;
     auto ascendcPlatform = platform_ascendc::PlatformAscendC(context->GetPlatformInfo());
@@ -28,7 +29,7 @@ static ge::graphStatus TilingFunc(gert::TilingContext* context)
     }
 
     uint32_t ALIGN_NUM = BLOCK_SIZE / sizeofdatatype;
-    uint32_t tiling_size = ((ub_size) / BLOCK_SIZE / 2) / 4;
+    uint32_t tiling_size = ((ub_size) / BLOCK_SIZE / 2) / NUM;
 
     uint32_t block_size = tiling_size * ALIGN_NUM;
     aivNum = (aivNum < totalLength / block_size) ? aivNum : (totalLength / block_size);

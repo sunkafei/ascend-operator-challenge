@@ -1,4 +1,9 @@
 #!/bin/bash
+
+# 先安装
+../build_out/custom_opp_ubuntu_aarch64.run
+
+
 export ASCEND_SLOG_PRINT_TO_STDOUT=0
 export ASCEND_GLOBAL_LOG_LEVEL=0
 
@@ -36,7 +41,7 @@ if [ ! $ASCEND_HOME_DIR ]; then
         export ASCEND_HOME_DIR=/usr/local/Ascend/ascend-toolkit/latest
     fi
 fi
-source $ASCEND_HOME_DIR/bin/setenv.bash
+#source $ASCEND_HOME_DIR/bin/setenv.bash
 
 export DDK_PATH=$ASCEND_HOME_DIR
 arch=$(uname -m)

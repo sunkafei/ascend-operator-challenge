@@ -5,8 +5,8 @@ import numpy as np
 import os
 
 def gen_golden_data_simple():
-    input_x = np.random.uniform(1, 100, [8, 2048]).astype(np.float16)
-    input_y = np.random.uniform(1, 100, [8, 2048]).astype(np.float16)
+    input_x = np.random.uniform(1, 100, [128, 2048]).astype(np.int32)
+    input_y = np.random.uniform(1, 100, [128, 2048]).astype(np.int32)
     golden = np.less_equal(input_x, input_y)
     os.system("mkdir -p input")
     os.system("mkdir -p output")

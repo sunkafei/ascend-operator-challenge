@@ -24,8 +24,8 @@ int deviceId = 0;
 OperatorDesc CreateOpDesc()
 {
     // define operator
-    std::vector<int64_t> shape { 8, 2048 };
-    aclDataType dataTypeInput = ACL_FLOAT16;
+    std::vector<int64_t> shape { 128, 2048 };
+    aclDataType dataTypeInput = ACL_INT32;
     aclDataType dataTypeOut = ACL_BOOL;
     aclFormat format = ACL_FORMAT_ND;
     OperatorDesc opDesc;
@@ -46,7 +46,7 @@ bool SetInputData(OpRunner &runner)
 
 bool ProcessOutputData(OpRunner &runner)
 {
-    WriteFile("../output/output_z.bin", runner.GetOutputBuffer<void>(0), runner.GetOutputSize(0));
+    WriteFile("../output/output.bin", runner.GetOutputBuffer<void>(0), runner.GetOutputSize(0));
     INFO_LOG("Write output success");
     return true;
 }

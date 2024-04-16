@@ -1,23 +1,57 @@
 
 #include "clip_by_value_tiling.h"
 #include "register/op_def_registry.h"
-
+#include "tiling/platform/platform_ascendc.h"
 
 namespace optiling {
-static ge::graphStatus TilingFunc(gert::TilingContext* context)
-{
+const uint32_t BLOCK_SIZE = 32;
+static ge::graphStatus TilingFunc(gert::TilingContext* context) {
+    ClipByValueTilingData tiling;
+    int32_t NUM = 10;
+    uint32_t sizeofdatatype;
+    uint32_t totalLengthAligned;
+    auto ascendcPlatform = platform_ascendc::PlatformAscendC(context->GetPlatformInfo());
+    auto socVersion = ascendcPlatform.GetSocVersion();
+    uint64_t ub_size;
+    ascendcPlatform.GetCoreMemSize(platform_ascendc::CoreMemType::UB, ub_size);
+    auto aivNum = ascendcPlatform.GetCoreNum();
 
-  ClipByValueTilingData tiling;
-  const gert::StorageShape* x1_shape = context->GetInputShape(0);
-  int32_t data_sz = 1;
-  for (int i = 0; i < x1_shape->GetStorageShape().GetDimNum(); i++)
-    data_sz *= x1_shape->GetStorageShape().GetDim(i);
-  tiling.set_size(data_sz);
-  context->SetBlockDim(8);
-  tiling.SaveToBuffer(context->GetRawTilingData()->GetData(), context->GetRawTilingData()->GetCapacity());
-  context->GetRawTilingData()->SetDataSize(tiling.GetDataSize());
+    uint32_t totalLength = context->GetInputTensor(0)->GetShapeSize();
+    auto dt = context->GetInputTensor(0)->GetDataType();
+    if(dt == ge::DT_INT8){
+        sizeofdatatype = 1;
+        NUM = 12;
+    }else if(dt == ge::DT_FLOAT16 || dt == ge::DT_BF16){
+        sizeofdatatype = 2;
+    }else{
+        sizeofdatatype = 4;
+    }
 
-  return ge::GRAPH_SUCCESS;
+    uint32_t ALIGN_NUM = BLOCK_SIZE / sizeofdatatype;
+    uint32_t tiling_size = ((ub_size) / BLOCK_SIZE / 2) / NUM;
+
+    uint32_t block_size = tiling_size * ALIGN_NUM;
+    aivNum = (aivNum < totalLength / block_size) ? aivNum : (totalLength / block_size);
+    aivNum = aivNum >= 1 ? aivNum : 1;
+
+    uint32_t core_size = totalLength / aivNum;
+    uint32_t core_remain = totalLength % aivNum;
+
+    tiling.set_totalLength(totalLength);
+    tiling.set_ALIGN_NUM(ALIGN_NUM);
+    tiling.set_tiling_size(tiling_size);
+    tiling.set_block_size(block_size);
+    tiling.set_aivNum(aivNum);
+    tiling.set_core_size(core_size);
+    tiling.set_core_remain(core_remain);
+
+    context->SetBlockDim(aivNum);
+
+    tiling.SaveToBuffer(context->GetRawTilingData()->GetData(), context->GetRawTilingData()->GetCapacity());
+    context->GetRawTilingData()->SetDataSize(tiling.GetDataSize());
+    size_t *currentWorkspace = context->GetWorkspaceSizes(1);
+    currentWorkspace[0] = 0;
+    return ge::GRAPH_SUCCESS;
 }
 }
 

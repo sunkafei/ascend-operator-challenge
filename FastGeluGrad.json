@@ -1,0 +1,41 @@
+[
+    {
+        "op": "FastGeluGrad",
+        "language": "cpp",
+        "input_desc": [
+            {
+                "name": "dy",
+                "param_type": "required",
+                "format": [
+                    "ND", "ND"
+                ],
+                "type": [
+                    "fp32", "fp16"
+                ]
+            },
+            {
+                "name": "x",
+                "param_type": "required",
+                "format": [
+                    "ND", "ND"
+                ],
+                "type": [
+                    "fp32", "fp16"
+                ]
+            }          
+        ],
+        "output_desc": [
+            {
+                "name": "z",
+                "param_type": "required",
+                "format": [
+                    "ND", "ND"
+                ],
+                "type": [
+                    "fp32", "fp16"
+                ]
+            }
+        ]
+    }
+]
+

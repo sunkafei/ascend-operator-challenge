@@ -1,5 +1,5 @@
 
-#include "fast_gelu_tiling.h"
+#include "fast_gelu_grad_tiling.h"
 #include "register/op_def_registry.h"
 #include "tiling/platform/platform_ascendc.h"
 
@@ -8,7 +8,7 @@ namespace optiling {
 const uint32_t BLOCK_SIZE = 32;
 static ge::graphStatus TilingFunc(gert::TilingContext* context)
 {
-    FastGeluTilingData tiling;
+    FastGeluGradTilingData tiling;
     constexpr int32_t NUM = 8;
     uint32_t sizeofdatatype;
     uint32_t totalLengthAligned;
@@ -69,16 +69,21 @@ static ge::graphStatus InferShape(gert::InferShapeContext* context)
 
 
 namespace ops {
-class FastGelu : public OpDef {
+class FastGeluGrad : public OpDef {
 public:
-    explicit FastGelu(const char* name) : OpDef(name)
+    explicit FastGeluGrad(const char* name) : OpDef(name)
     {
+        this->Input("dy")
+            .ParamType(REQUIRED)
+            .DataType({ge::DT_FLOAT, ge::DT_FLOAT16})
+            .Format({ge::FORMAT_ND, ge::FORMAT_ND})
+            .UnknownShapeFormat({ge::FORMAT_ND, ge::FORMAT_ND});
         this->Input("x")
             .ParamType(REQUIRED)
             .DataType({ge::DT_FLOAT, ge::DT_FLOAT16})
             .Format({ge::FORMAT_ND, ge::FORMAT_ND})
             .UnknownShapeFormat({ge::FORMAT_ND, ge::FORMAT_ND});
-        this->Output("y")
+        this->Output("z")
             .ParamType(REQUIRED)
             .DataType({ge::DT_FLOAT, ge::DT_FLOAT16})
             .Format({ge::FORMAT_ND, ge::FORMAT_ND})
@@ -93,5 +98,5 @@ public:
     }
 };
 
-OP_ADD(FastGelu);
+OP_ADD(FastGeluGrad);
 }

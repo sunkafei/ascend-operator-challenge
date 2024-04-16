@@ -10,11 +10,10 @@ public:
         ASSERT(GetBlockNum() != 0 && "block dim can not be zero!");
         this->blockLength = core_size + (GetBlockIdx() < core_remain);
         this->tileLength = block_size;
-        this->lastpadding = block_size;
         this->divnum = divnum;
         this->ALIGN_NUM = ALIGN_NUM;
+        this->lastpadding = (this->blockLength % ALIGN_NUM ? ALIGN_NUM - this->blockLength % ALIGN_NUM : 0);
         this->blockLength = this->blockLength + (this->blockLength % ALIGN_NUM ? ALIGN_NUM - this->blockLength % ALIGN_NUM : 0);
-        this->lastpadding = this->blockLength - this->lastpadding;
 
         auto startPointer = this->blockLength * GetBlockIdx() + (GetBlockIdx() < core_remain ? GetBlockIdx() : core_remain);
         auto bufferlength = this->blockLength;
@@ -63,9 +62,15 @@ private:
         // alloc tensor from queue memory
         LocalTensor<DTYPE_Y> xLocal = inQueueX.AllocTensor<DTYPE_Y>();
         LocalTensor<DTYPE_Y> yLocal = inQueueY.AllocTensor<DTYPE_Y>();
-        
+        // copy progress_th tile from global tensor to local tensor
         DataCopy(xLocal, xGm[progress * this->tileLength], length);
         DataCopy(yLocal, yGm[progress * this->tileLength], length);
+        if(progress == this->tileNum - 1){
+            for(int i=length-this->lastpadding;i<length;i++){
+                xLocal.SetValue(i, 0);
+                yLocal.SetValue(i, 0);
+            }
+        }
         
         // enque input tensors to VECIN queue
         inQueueX.EnQue(xLocal);

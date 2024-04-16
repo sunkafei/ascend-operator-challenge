@@ -4,12 +4,12 @@
 import numpy as np
 import os
 def gen_golden_data_simple():
-    input_x = np.random.uniform(1, 10, [4093, 4095]).astype(np.float16)
-    input_y = np.random.uniform(1, 10, [4093, 4095]).astype(np.float16)
-    input_z = np.random.uniform(1, 10, [4093, 4095]).astype(np.float16)
-    input_value = np.random.uniform(1, 10, [1]).astype(np.float16)
+    input_x = np.random.uniform(1, 4, [4093, 4095]).astype(np.int8)
+    input_y = np.random.uniform(1, 4, [4093, 4095]).astype(np.int8)
+    input_z = np.random.uniform(1, 4, [4093, 4095]).astype(np.int8)
+    input_value = np.random.uniform(1, 4, [1]).astype(np.int8)
 
-    golden = (input_x + input_y*input_z*input_value).astype(np.float16)
+    golden = (input_x + input_y*input_z*input_value).astype(np.int8)
     os.system("mkdir -p input")
     os.system("mkdir -p output")
     input_x.tofile("./input/input_x.bin")

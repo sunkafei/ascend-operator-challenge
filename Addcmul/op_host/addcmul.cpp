@@ -3,12 +3,11 @@
 #include "register/op_def_registry.h"
 #include "tiling/platform/platform_ascendc.h"
 
-
 namespace optiling {
 const uint32_t BLOCK_SIZE = 32;
-static ge::graphStatus TilingFunc(gert::TilingContext* context)
-{
+static ge::graphStatus TilingFunc(gert::TilingContext* context) {
     TilingData tiling;
+    int32_t NUM = 10;
     uint32_t sizeofdatatype;
     uint32_t totalLengthAligned;
     auto ascendcPlatform = platform_ascendc::PlatformAscendC(context->GetPlatformInfo());
@@ -21,14 +20,15 @@ static ge::graphStatus TilingFunc(gert::TilingContext* context)
     auto dt = context->GetInputTensor(0)->GetDataType();
     if(dt == ge::DT_INT8){
         sizeofdatatype = 1;
-    }else if(dt == ge::DT_FLOAT16){
+        NUM = 12;
+    }else if(dt == ge::DT_FLOAT16 || dt == ge::DT_BF16){
         sizeofdatatype = 2;
     }else{
         sizeofdatatype = 4;
     }
 
     uint32_t ALIGN_NUM = BLOCK_SIZE / sizeofdatatype;
-    uint32_t tiling_size = ((ub_size) / BLOCK_SIZE / 2) / 4;
+    uint32_t tiling_size = ((ub_size) / BLOCK_SIZE / 2) / NUM;
 
     uint32_t block_size = tiling_size * ALIGN_NUM;
     aivNum = (aivNum < totalLength / block_size) ? aivNum : (totalLength / block_size);

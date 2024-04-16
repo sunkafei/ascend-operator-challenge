@@ -19,8 +19,8 @@ public:
         auto bufferlength = this->blockLength;
 
         // get start index for current core, core parallel
-        yGm.SetGlobalBuffer((__gm__ DTYPE_Y*)predict + startPointer, bufferlength);
-        xGm.SetGlobalBuffer((__gm__ DTYPE_Y*)label + startPointer, bufferlength);
+        xGm.SetGlobalBuffer((__gm__ DTYPE_Y*)predict + startPointer, bufferlength);
+        yGm.SetGlobalBuffer((__gm__ DTYPE_Y*)label + startPointer, bufferlength);
         zGm.SetGlobalBuffer((__gm__ DTYPE_Y*)y + startPointer, ALIGN_NUM);
 
         this->tileNum = this->blockLength / this->tileLength + (this->blockLength % this->tileLength > 0);

@@ -61,14 +61,11 @@ private:
         LocalTensor<DTYPE_Y> xLocal = inQueueX.AllocTensor<DTYPE_Y>();
         LocalTensor<DTYPE_Y> yLocal = inQueueY.AllocTensor<DTYPE_Y>();
         // copy progress_th tile from global tensor to local tensor
+        DTYPE_Y zero = 0;
+        Duplicate(xLocal, zero, length);
         DataCopy(xLocal, xGm[progress * this->tileLength], length);
+        Duplicate(yLocal, zero, length);
         DataCopy(yLocal, yGm[progress * this->tileLength], length);
-        if(progress == this->tileNum - 1){
-            for(int i=length-this->lastpadding;i<length;i++){
-                xLocal.SetValue(i, 0);
-                yLocal.SetValue(i, 0);
-            }
-        }
         
         // enque input tensors to VECIN queue
         inQueueX.EnQue(xLocal);

@@ -24,8 +24,8 @@ int deviceId = 0;
 OperatorDesc CreateOpDesc()
 {
     // define operator
-    std::vector<int64_t> shape { 128, 2048 };
-    aclDataType dataTypeInput = ACL_INT32;
+    std::vector<int64_t> shape { 4095, 4095 };
+    aclDataType dataTypeInput = ACL_INT8;
     aclDataType dataTypeOut = ACL_BOOL;
     aclFormat format = ACL_FORMAT_ND;
     OperatorDesc opDesc;

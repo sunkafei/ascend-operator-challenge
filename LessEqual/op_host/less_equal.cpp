@@ -29,9 +29,9 @@ static ge::graphStatus TilingFunc(gert::TilingContext* context) {
         sizeofdatatype = 4;
         NUM = 10;
     }
-    else{
+    else{ //DT_FLOAT
         sizeofdatatype = 4;
-        NUM = 8;
+        NUM = 9;
     }
 
     uint32_t ALIGN_NUM = BLOCK_SIZE / sizeofdatatype;

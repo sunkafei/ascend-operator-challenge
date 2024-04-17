@@ -2,11 +2,7 @@
 #include <type_traits>
 using namespace AscendC;
 constexpr int32_t BUFFER_NUM = 2;
-template<typename T> struct Map {using type = int8_t;};
-template<> struct Map<int8_t> {using type = half;};
-template<> struct Map<int32_t> {using type = float;};
 template<typename T> class KernelLessEqual {
-    using type = typename Map<T>::type;
 public:
     __aicore__ inline KernelLessEqual() {}
     __aicore__ inline void Init(GM_ADDR x1, GM_ADDR x2, GM_ADDR y, uint32_t totalLength, uint32_t ALIGN_NUM, uint32_t block_size, uint32_t core_size, uint32_t core_remain) {
@@ -29,14 +25,24 @@ public:
         pipe.InitBuffer(Q_y, BUFFER_NUM, this->tileLength * sizeof(DTYPE_Y));
         pipe.InitBuffer(B_bits, this->tileLength * sizeof(uint8_t));
         pipe.InitBuffer(B_result, this->tileLength * sizeof(half));
-        pipe.InitBuffer(B_one, this->tileLength * sizeof(half));
-        if constexpr (std::is_same_v<T, int8_t> || std::is_same_v<T, int32_t>) {
-            pipe.InitBuffer(B_x1, this->tileLength * sizeof(type));
-            pipe.InitBuffer(B_x2, this->tileLength * sizeof(type));
+        pipe.InitBuffer(B_zero, this->tileLength * sizeof(half));
+        this->zero = B_zero.Get<half>();
+        Duplicate(this->zero, half(0), this->tileLength);
+        if constexpr (std::is_same_v<T, int32_t>) {
+            pipe.InitBuffer(B_x1, this->tileLength * sizeof(float));
+            pipe.InitBuffer(B_x2, this->tileLength * sizeof(float));
+            auto x2 = B_x2.Get<float>();
+            Duplicate(x2, float(0), this->tileLength);
         }
-
-        this->one = B_one.Get<half>();
-        Duplicate(this->one, half(1), this->tileLength);
+        else if constexpr (std::is_same_v<T, float>) {
+            pipe.InitBuffer(B_x2, this->tileLength * sizeof(float));
+            auto x2 = B_x2.Get<float>();
+            Duplicate(x2, float(0), this->tileLength);
+        }
+        else if constexpr (std::is_same_v<T, int8_t>) {
+            pipe.InitBuffer(B_x1, this->tileLength * sizeof(half));
+            pipe.InitBuffer(B_x2, this->tileLength * sizeof(half));
+        }
     }
     __aicore__ inline void Process() {
         int32_t loopCount = this->tileNum;
@@ -67,18 +73,34 @@ private:
         auto bits = B_bits.Get<uint8_t>();
         auto result = B_result.Get<half>();
         auto inty = y.ReinterpretCast<uint8_t>();
-        if constexpr (std::is_same_v<T, half> || std::is_same_v<T, float>) {
-            Compare(bits, x1, x2, CMPMODE::LE, this->length);
-            Select(result, bits, one, half(0), SELMODE::VSEL_TENSOR_SCALAR_MODE, this->length);
+        if constexpr (std::is_same_v<T, int8_t>) {
+            auto float_x1 = B_x1.Get<half>();
+            auto float_x2 = B_x2.Get<half>();
+            Cast(float_x1, x1, RoundMode::CAST_NONE, this->length);
+            Cast(float_x2, x2, RoundMode::CAST_NONE, this->length);
+            Min(float_x2, float_x1, float_x2, this->length);
+            Sub(float_x1, float_x1, float_x2, this->length);
+            Compare(bits, float_x1, zero, CMPMODE::NE, this->length);
+            Select(result, bits, zero, half(1), SELMODE::VSEL_TENSOR_SCALAR_MODE, this->length);
             Cast(inty, result, RoundMode::CAST_ROUND, this->length);
         }
         else {
-            auto float_x1 = B_x1.Get<type>();
-            auto float_x2 = B_x2.Get<type>();
-            Cast(float_x1, x1, RoundMode::CAST_NONE, this->length);
-            Cast(float_x2, x2, RoundMode::CAST_NONE, this->length);
-            Compare(bits, float_x1, float_x2, CMPMODE::LE, this->length);
-            Select(result, bits, one, half(0), SELMODE::VSEL_TENSOR_SCALAR_MODE, this->length);
+            Min(x2, x1, x2, this->length);
+            Sub(x1, x1, x2, this->length);
+            if constexpr (std::is_same_v<T, int32_t>) {
+                auto val = B_x1.Get<float>();
+                auto float_zero = B_x2.Get<float>();
+                Cast(val, x1, RoundMode::CAST_NONE, this->length);
+                Compare(bits, val, float_zero, CMPMODE::NE, this->length);
+            }
+            else if constexpr (std::is_same_v<T, float>) {
+                auto float_zero = B_x2.Get<float>();
+                Compare(bits, x1, float_zero, CMPMODE::NE, this->length);
+            }
+            else { //half
+                Compare(bits, x1, zero, CMPMODE::NE, this->length);
+            }
+            Select(result, bits, zero, half(1), SELMODE::VSEL_TENSOR_SCALAR_MODE, this->length);
             Cast(inty, result, RoundMode::CAST_ROUND, this->length);
         }
         Q_x1.FreeTensor(x1);
@@ -95,9 +117,9 @@ private:
     TPipe pipe;
     TQue<QuePosition::VECIN, BUFFER_NUM> Q_x1, Q_x2;
     TQue<QuePosition::VECOUT, BUFFER_NUM> Q_y;
-    TBuf<QuePosition::VECCALC> B_result, B_bits, B_one;
+    TBuf<QuePosition::VECCALC> B_result, B_zero, B_bits;
     TBuf<QuePosition::VECCALC> B_x1, B_x2;
-    LocalTensor<half> one;
+    LocalTensor<half> zero;
     GlobalTensor<DTYPE_X1> Gm_x1;
     GlobalTensor<DTYPE_X2> Gm_x2;
     GlobalTensor<DTYPE_Y> Gm_y;

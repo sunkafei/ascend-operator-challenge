@@ -15,7 +15,7 @@ if(ENABLE_CROSS_COMPILE)
 else()
     set(CMAKE_COMPILE ${CMAKE_CXX_COMPILER})
 endif()
-
+add_compile_options(-std=c++17)
 include(cmake/config.cmake)
 include(cmake/func.cmake)
 include(cmake/intf.cmake)

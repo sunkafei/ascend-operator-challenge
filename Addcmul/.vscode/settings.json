@@ -7,6 +7,9 @@
         "type_traits": "cpp",
         "utility": "cpp",
         "string": "cpp",
-        "string_view": "cpp"
+        "string_view": "cpp",
+        "ratio": "cpp",
+        "chrono": "cpp",
+        "compare": "cpp"
     }
 }

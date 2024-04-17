@@ -30,14 +30,16 @@ public:
         pipe.InitBuffer(inQueueY, BUFFER_NUM, this->tileLength * sizeof(DTYPE_Y));
         pipe.InitBuffer(outQueueZ, BUFFER_NUM, ALIGN_NUM * sizeof(DTYPE_Y));
         pipe.InitBuffer(tmpBuffer, this->tileLength * sizeof(DTYPE_Y));
-        pipe.InitBuffer(tmpBuffer2, ALIGN_NUM * sizeof(DTYPE_Y));
     }
     __aicore__ inline void Process()
     {
-        LocalTensor<DTYPE_Y> tmp2 = tmpBuffer2.Get<DTYPE_Y>();
+        LocalTensor<DTYPE_Y> zLocal = outQueueZ.AllocTensor<DTYPE_Y>(); LocalTensor<DTYPE_Y> zLocal2 = outQueueZ.AllocTensor<DTYPE_Y>();
         DTYPE_Y zero = 0;
-        Duplicate(tmp2, zero, this->ALIGN_NUM);
-        DataCopy(zGm, tmp2, this->ALIGN_NUM);
+        Duplicate(zLocal, zero, this->ALIGN_NUM);
+        outQueueZ.EnQue<DTYPE_Y>(zLocal); outQueueZ.EnQue<DTYPE_Y>(zLocal2);
+        zLocal = outQueueZ.DeQue<DTYPE_Y>(); zLocal2 = outQueueZ.DeQue<DTYPE_Y>();
+        DataCopy(zGm, zLocal, this->ALIGN_NUM);
+        outQueueZ.FreeTensor(zLocal); outQueueZ.FreeTensor(zLocal2);
         // loop count need to be doubled, due to double buffer
         int32_t loopCount = this->tileNum;
         // tiling strategy, pipeline parallel
@@ -50,10 +52,6 @@ public:
         CopyIn(loopCount - 1, length);
         Compute(loopCount - 1, length);
         CopyOut(loopCount - 1);
-
-        // DataCopy(tmp2, zGm, this->ALIGN_NUM);
-        // Muls(tmp2, tmp2, this->divnum, this->ALIGN_NUM);
-        // DataCopy(zGm, tmp2, this->ALIGN_NUM);
     }
 
 private:
@@ -63,14 +61,11 @@ private:
         LocalTensor<DTYPE_Y> xLocal = inQueueX.AllocTensor<DTYPE_Y>();
         LocalTensor<DTYPE_Y> yLocal = inQueueY.AllocTensor<DTYPE_Y>();
         // copy progress_th tile from global tensor to local tensor
+        DTYPE_Y zero = 0;
+        Duplicate(xLocal, zero, length);
         DataCopy(xLocal, xGm[progress * this->tileLength], length);
+        Duplicate(yLocal, zero, length);
         DataCopy(yLocal, yGm[progress * this->tileLength], length);
-        if(progress == this->tileNum - 1){
-            for(int i=length-this->lastpadding;i<length;i++){
-                xLocal.SetValue(i, 0);
-                yLocal.SetValue(i, 0);
-            }
-        }
         
         // enque input tensors to VECIN queue
         inQueueX.EnQue(xLocal);
@@ -111,7 +106,7 @@ private:
 
 private:
     TPipe pipe;
-    TBuf<QuePosition::VECCALC> tmpBuffer, tmpBuffer2;
+    TBuf<QuePosition::VECCALC> tmpBuffer;
     // create queues for input, in this case depth is equal to buffer num
     TQue<QuePosition::VECIN, BUFFER_NUM> inQueueX, inQueueY;
     // create queue for output, in this case depth is equal to buffer num

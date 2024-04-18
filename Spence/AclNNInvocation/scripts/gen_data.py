@@ -15,10 +15,10 @@ def spence(x):
     w, y, z = 0, 0, 0
     flag = 0
 
-    #if x == 1.0:
-    #    return 0.0
-    #if x == 0.0:
-    #    return PIFS
+    if x == 1.0:
+        return 0.0
+    if x == 0.0:
+        return PIFS
     if x > 2.0:
         x = 1.0/x
         flag |= 2
@@ -31,23 +31,23 @@ def spence(x):
     else:
         w = x - 1.0
     y = -w * polevlf( w, A ) / polevlf( w, B )
-    #if flag & 1:
-    #    y = PIFS - log(x) * log(1.0-x) - y
-    #if flag & 2:
-    #    z = log(x)
-    #    y = -0.5 * z * z  -  y
+    if flag & 1:
+        y = PIFS - log(x) * log(1.0-x) - y
+    if flag & 2:
+        z = log(x)
+        y = -0.5 * z * z  -  y
     return y
 
 def gen_golden_data_simple():
-    input_x = np.random.uniform(0.1, 4.0, [4096]).astype(np.float32)
+    input_x = np.random.uniform(0.0, 10.0, [4096]).astype(np.float16)
     print(input_x[:8])
-    #golden = tf.math.special.spence(input_x.astype(np.float32)).numpy().astype(np.float16)
+    golden = tf.math.special.spence(input_x.astype(np.float32)).numpy().astype(np.float16)
     
-    golden = np.array([0] * len(input_x), dtype=np.float32)
-    for i in range(len(golden)):
-        x = input_x[i]
-        golden[i] = spence(x)
-    golden = golden.astype(np.float32)
+    #golden = np.array([0] * len(input_x), dtype=np.float32)
+    #for i in range(len(golden)):
+    #    x = input_x[i]
+    #    golden[i] = spence(x)
+    #golden = golden.astype(np.float32)
 
     os.system("mkdir -p input")
     os.system("mkdir -p output")

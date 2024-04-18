@@ -33,6 +33,7 @@ public:
         pipe.InitBuffer(B_bits3, this->tileLength * sizeof(uint8_t));
         if constexpr (!std::is_same_v<TYPE_X, float>) {
             pipe.InitBuffer(B_fx, this->tileLength * sizeof(float));
+            pipe.InitBuffer(B_fy, this->tileLength * sizeof(float));
         }
     }
     __aicore__ inline void Process() {
@@ -55,15 +56,19 @@ private:
     }
     __aicore__ inline void Compute(int32_t progress, uint32_t length) {
         LocalTensor<TYPE_X> x = Q_x.DeQue<TYPE_X>();
+        LocalTensor<TYPE_Y> y = Q_y.AllocTensor<TYPE_Y>();
         if constexpr (std::is_same_v<TYPE_X, float>) {
-            Calculate(x, length);
+            Calculate(x, y, length);
         }
         else {
             auto fx = B_fx.Get<float>();
-            Cast(fx, x, RoundMode::CAST_ROUND, length);
-            Calculate(fx, length);
+            auto fy = B_fy.Get<float>();
+            Cast(fx, x, RoundMode::CAST_NONE, length);
+            Calculate(fx, fy, length);
+            Cast(y, fy, RoundMode::CAST_NONE, length);
         }
         Q_x.FreeTensor(x);
+        Q_y.EnQue<TYPE_Y>(y);
     }
     __aicore__ inline void polevlf_A(LocalTensor<float> &dst, LocalTensor<float> &w, uint32_t length) {
         Duplicate(dst, float(0), length);
@@ -79,12 +84,10 @@ private:
             Adds(dst, dst, B[i], length);
         }
     }
-    __aicore__ inline void Calculate(LocalTensor<float> &x, uint32_t length) {
-        LocalTensor<TYPE_Y> y = Q_y.AllocTensor<TYPE_Y>();
+    __aicore__ inline void Calculate(LocalTensor<float> &x, LocalTensor<float> &y, uint32_t length) {
         auto w = B_w.Get<float>();
         auto tmp1 = B_tmp1.Get<float>(), tmp2 = B_tmp2.Get<float>(), tmp3 = B_tmp3.Get<float>();
         auto bits1 = B_bits1.Get<uint8_t>(), bits2 = B_bits2.Get<uint8_t>(), bits3 = B_bits3.Get<uint8_t>();
-        Duplicate(w, float(0), length);
 
         Duplicate(tmp1, float(2), length);
         Compare(bits2, x, tmp1, CMPMODE::GT, length); //bits2: x > 2
@@ -117,14 +120,32 @@ private:
         polevlf_B(tmp2, w, length);
         Muls(tmp1, tmp1, float(-1), length);
         Mul(tmp1, tmp1, w, length);
-        Div(tmp1, tmp1, tmp2, length);
-        
+        Div(tmp2, tmp1, tmp2, length); //tmp2: y
 
+        Ln(tmp1, x, length); //tmp1: log(x)
+        Adds(tmp3, tmp3, float(1.0), length); //tmp3: 1 - x
+        Ln(tmp3, tmp3, length); //tmp3: log(1 - x)
+        Mul(tmp1, tmp1, tmp3, length); //tmp1: log(x) * log(1 - x)
+        Muls(tmp1, tmp1, float(-1), length); //tmp1: -log(x) * log(1 - x)
+        Adds(tmp1, tmp1, float(PIFS), length); //tmp1: PIFS - log(x) * log(1 - x)
+        Sub(tmp1, tmp1, tmp2, length); //tmp1: PIFS - log(x) * log(1 - x) - y
+        Select(tmp1, bits1, tmp1, float(0), SELMODE::VSEL_TENSOR_SCALAR_MODE, length);
+        Not(bits1.ReinterpretCast<uint16_t>(), bits1.ReinterpretCast<uint16_t>(), length / 2);
+        Select(tmp2, bits1, tmp2, float(0), SELMODE::VSEL_TENSOR_SCALAR_MODE, length);
+        Or(tmp2.ReinterpretCast<uint16_t>(), tmp2.ReinterpretCast<uint16_t>(), tmp1.ReinterpretCast<uint16_t>(), length * 2);
 
-        if constexpr (std::is_same_v<TYPE_Y, float>) {
-            DataCopy(y, tmp1, length);
-        }
-        Q_y.EnQue<TYPE_Y>(y);
+        Ln(tmp1, x, length); //tmp1: z
+        Mul(tmp1, tmp1, tmp1, length); //tmp1: z * z
+        Muls(tmp1, tmp1, float(-0.5), length); //tmp1: -0.5 * z * z
+        Sub(tmp1, tmp1, tmp2, length); //tmp1: -0.5 * z * z - y
+        Select(tmp1, bits2, tmp1, float(0), SELMODE::VSEL_TENSOR_SCALAR_MODE, length);
+        Not(bits2.ReinterpretCast<uint16_t>(), bits2.ReinterpretCast<uint16_t>(), length / 2);
+        Select(tmp2, bits2, tmp2, float(0), SELMODE::VSEL_TENSOR_SCALAR_MODE, length);
+        Or(y.ReinterpretCast<uint16_t>(), tmp1.ReinterpretCast<uint16_t>(), tmp2.ReinterpretCast<uint16_t>(), length * 2);
+
+        Duplicate(tmp1, float(0), length);
+        Compare(bits1, x, tmp1, CMPMODE::NE, length);
+        Select(y, bits1, y, float(PIFS), SELMODE::VSEL_TENSOR_SCALAR_MODE, length);
     }
     __aicore__ inline void CopyOut(int32_t progress, uint32_t length) {
         LocalTensor<TYPE_Y> y = Q_y.DeQue<TYPE_Y>();
@@ -135,7 +156,7 @@ private:
     TPipe pipe;
     TQue<QuePosition::VECIN, BUFFER_NUM> Q_x;
     TQue<QuePosition::VECOUT, BUFFER_NUM> Q_y;
-    TBuf<QuePosition::VECCALC> B_w, B_fx, B_tmp1, B_tmp2, B_tmp3;
+    TBuf<QuePosition::VECCALC> B_w, B_fx, B_fy, B_tmp1, B_tmp2, B_tmp3;
     TBuf<QuePosition::VECCALC> B_bits1, B_bits2, B_bits3;
     GlobalTensor<TYPE_X> Gm_x;
     GlobalTensor<TYPE_Y> Gm_y;

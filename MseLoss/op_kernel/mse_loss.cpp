@@ -8,20 +8,20 @@ public:
     __aicore__ inline void Init(GM_ADDR predict, GM_ADDR label, GM_ADDR y, float divnum, uint32_t totalLength, uint32_t ALIGN_NUM, uint32_t block_size, uint32_t core_size, uint32_t core_remain)
     {
         ASSERT(GetBlockNum() != 0 && "block dim can not be zero!");
-        this->blockLength = core_size + (GetBlockIdx() < core_remain);
+        this->blockLength = core_size + (GetBlockNum() == GetBlockIdx() + 1 ? 0 : core_remain);
         this->tileLength = block_size;
         this->divnum = divnum;
         this->ALIGN_NUM = ALIGN_NUM;
         this->lastpadding = (this->blockLength % ALIGN_NUM ? ALIGN_NUM - this->blockLength % ALIGN_NUM : 0);
         this->blockLength = this->blockLength + (this->blockLength % ALIGN_NUM ? ALIGN_NUM - this->blockLength % ALIGN_NUM : 0);
 
-        auto startPointer = this->blockLength * GetBlockIdx() + (GetBlockIdx() < core_remain ? GetBlockIdx() : core_remain);
+        auto startPointer = core_size * GetBlockIdx();
         auto bufferlength = this->blockLength;
 
         // get start index for current core, core parallel
         xGm.SetGlobalBuffer((__gm__ DTYPE_Y*)predict + startPointer, bufferlength);
         yGm.SetGlobalBuffer((__gm__ DTYPE_Y*)label + startPointer, bufferlength);
-        zGm.SetGlobalBuffer((__gm__ DTYPE_Y*)y + startPointer, ALIGN_NUM);
+        zGm.SetGlobalBuffer((__gm__ DTYPE_Y*)y, ALIGN_NUM);
 
         this->tileNum = this->blockLength / this->tileLength + (this->blockLength % this->tileLength > 0);
 
@@ -62,9 +62,7 @@ private:
         LocalTensor<DTYPE_Y> yLocal = inQueueY.AllocTensor<DTYPE_Y>();
         // copy progress_th tile from global tensor to local tensor
         DTYPE_Y zero = 0;
-        Duplicate(xLocal, zero, length);
         DataCopy(xLocal, xGm[progress * this->tileLength], length);
-        Duplicate(yLocal, zero, length);
         DataCopy(yLocal, yGm[progress * this->tileLength], length);
         
         // enque input tensors to VECIN queue

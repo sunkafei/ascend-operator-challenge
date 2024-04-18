@@ -4,7 +4,7 @@
 #include "tiling/platform/platform_ascendc.h"
 
 namespace optiling {
-const uint32_t BLOCK_SIZE = 32;
+const uint32_t BLOCK_SIZE = 256;
 static ge::graphStatus TilingFunc(gert::TilingContext* context) {
     TilingData tiling;
     int32_t NUM = 24;
@@ -20,18 +20,14 @@ static ge::graphStatus TilingFunc(gert::TilingContext* context) {
     auto dt = context->GetInputTensor(0)->GetDataType();
     if(dt == ge::DT_INT8){
         sizeofdatatype = 1;
-        //NUM = 15;
     }else if(dt == ge::DT_FLOAT16 || dt == ge::DT_BF16){
         sizeofdatatype = 2;
-        //NUM = 9;
     }
     else if (dt == ge::DT_INT32) {
         sizeofdatatype = 4;
-        //NUM = 10;
     }
     else{
         sizeofdatatype = 4;
-        //NUM = 9;
     }
 
     uint32_t ALIGN_NUM = BLOCK_SIZE / sizeofdatatype;

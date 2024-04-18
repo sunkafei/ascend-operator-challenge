@@ -24,8 +24,8 @@ int deviceId = 0;
 OperatorDesc CreateOpDesc()
 {
     // define operator
-    std::vector<int64_t> shape { 1024 };
-    aclDataType dataType = ACL_FLOAT16;
+    std::vector<int64_t> shape { 4096 };
+    aclDataType dataType = ACL_FLOAT;
     aclFormat format = ACL_FORMAT_ND;
     OperatorDesc opDesc;
     opDesc.AddInputTensorDesc(dataType, shape.size(), shape.data(), format);

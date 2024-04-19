@@ -5,11 +5,14 @@ import numpy as np
 import os
 
 def gen_golden_data_simple():
-    x = np.random.uniform(1, 10, [3,1024, 1024,3]).astype(np.float16)
-    gamma = np.random.uniform(1, 10, [3,1024, 1024,3]).astype(np.float16)
-    beta = np.random.uniform(1, 10, [3,1024, 1024,3]).astype(np.float16)
+    shape = [3,1024, 1024,3]
     data_format = "ND"
     epsilon = 0
+    dtype = np.float32
+    
+    x = np.random.uniform(1, 10, shape).astype(dtype)
+    gamma = np.random.uniform(1, 10, shape).astype(dtype)
+    beta = np.random.uniform(1, 10, shape).astype(dtype)
     shape_x = x.shape
     axis = []
     if data_format in ("NDHWC",):
@@ -36,6 +39,16 @@ def gen_golden_data_simple():
     result.tofile("./output/golden_y.bin")
     mean.tofile("./output/golden_mean.bin")
     variance.tofile("./output/golden_variance.bin")
+    with open("./output/meta", "w") as fp:
+        if dtype == np.float32:
+            print("float32", file=fp)
+        else:
+            print("float16", file=fp)
+        print(data_format, file=fp)
+        for i in shape:
+            print(i, file=fp)
+        print("*", file=fp)
+        print(epsilon, file=fp)
 
 if __name__ == "__main__":
     gen_golden_data_simple()

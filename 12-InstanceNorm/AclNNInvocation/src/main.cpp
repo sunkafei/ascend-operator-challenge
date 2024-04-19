@@ -7,6 +7,8 @@
 * but WITHOUT ANY WARRANTY; without even the implied warranty of
 * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.
 */
+#include <fstream>
+#include <string>
 #include <cstdint>
 #include <iostream>
 #include <unistd.h>
@@ -20,17 +22,39 @@
 
 bool g_isDevice = false;
 int deviceId = 0;
-
+std::string dataFormat, length, dtype;
 OperatorDesc CreateOpDesc()
 {
-    // define operator
-    std::vector<int64_t> shape { 3,1024, 1024,3 };
-    std::vector<int64_t> shapeMean { 3,1024};
-    aclDataType dataType = ACL_FLOAT16;
-    aclFormat format = ACL_FORMAT_ND;
+    std::fstream meta("../output/meta");
     OperatorDesc opDesc;
-    opDesc.dataFormat = "NHWC";
-    opDesc.epsilon = 0;
+    meta >> dtype;
+    meta >> dataFormat;
+    opDesc.dataFormat = (char *)dataFormat.c_str();
+    std::vector<int64_t> shape;
+    while (meta >> length) {
+        if (length == "*") break;
+        shape.push_back(std::stoi(length));
+    }
+    std::vector<int64_t> shapeMean;
+    if (dataFormat == "NDHWC") {
+        shapeMean = {shape[0], shape[4]};
+    }
+    else if (dataFormat == "NCDHW") {
+        shapeMean = {shape[0], shape[1]};
+    }
+    else if (dataFormat == "NHWC") {
+        shapeMean = {shape[0], shape[3]};
+    }
+    else if (dataFormat == "NCHW") {
+        shapeMean = {shape[0], shape[1]};
+    }
+    else {
+        shapeMean = {shape[0], shape[1]};
+    }
+    meta >> opDesc.epsilon;
+    
+    aclDataType dataType = (dtype == "float32" ? ACL_FLOAT : ACL_FLOAT16);
+    aclFormat format = ACL_FORMAT_ND;
     opDesc.AddInputTensorDesc(dataType, shape.size(), shape.data(), format);
     opDesc.AddInputTensorDesc(dataType, shape.size(), shape.data(), format);
     opDesc.AddInputTensorDesc(dataType, shape.size(), shape.data(), format);

@@ -2,22 +2,42 @@
 #include "instance_norm_tiling.h"
 #include "register/op_def_registry.h"
 
-
 namespace optiling {
-static ge::graphStatus TilingFunc(gert::TilingContext* context)
-{
+static ge::graphStatus TilingFunc(gert::TilingContext* context) {
+    InstanceNormTilingData tiling;
 
-  InstanceNormTilingData tiling;
-  const gert::StorageShape* x1_shape = context->GetInputShape(0);
-  int32_t data_sz = 1;
-  for (int i = 0; i < x1_shape->GetStorageShape().GetDimNum(); i++)
-    data_sz *= x1_shape->GetStorageShape().GetDim(i);
-  tiling.set_size(data_sz);
-  context->SetBlockDim(8);
-  tiling.SaveToBuffer(context->GetRawTilingData()->GetData(), context->GetRawTilingData()->GetCapacity());
-  context->GetRawTilingData()->SetDataSize(tiling.GetDataSize());
+    const gert::StorageShape* shape = context->GetInputShape(0);
+    uint32_t totalSize = 1;
+    for (int i = 0; i < shape->GetStorageShape().GetDimNum(); i++) {
+        totalSize *= shape->GetStorageShape().GetDim(i);
+    }
+    tiling.set_totalSize(totalSize);
+    const char *str = context->GetAttrs()->GetAttrPointer<char>(0);
+    if (strcmp(str, "NDHWC") == 0) {
+        tiling.set_batchSize(shape->GetStorageShape().GetDim(0));
+        tiling.set_stepSize(shape->GetStorageShape().GetDim(4));
+    }
+    else if(strcmp(str, "NCDHW") == 0) {
+        tiling.set_batchSize(shape->GetStorageShape().GetDim(0) * shape->GetStorageShape().GetDim(1));
+        tiling.set_stepSize(1);
+    }
+    else if(strcmp(str, "NHWC") == 0) {
+        tiling.set_batchSize(shape->GetStorageShape().GetDim(0));
+        tiling.set_stepSize(shape->GetStorageShape().GetDim(3));
+    }
+    else if(strcmp(str, "NCHW") == 0) {
+        tiling.set_batchSize(shape->GetStorageShape().GetDim(0) * shape->GetStorageShape().GetDim(1));
+        tiling.set_stepSize(1);
+    }
+    else { // ND
+        tiling.set_batchSize(shape->GetStorageShape().GetDim(0) * shape->GetStorageShape().GetDim(1));
+        tiling.set_stepSize(1);
+    }
 
-  return ge::GRAPH_SUCCESS;
+    context->SetBlockDim(1);
+    tiling.SaveToBuffer(context->GetRawTilingData()->GetData(), context->GetRawTilingData()->GetCapacity());
+    context->GetRawTilingData()->SetDataSize(tiling.GetDataSize());
+    return ge::GRAPH_SUCCESS;
 }
 }
 

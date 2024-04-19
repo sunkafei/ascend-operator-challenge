@@ -1,4 +1,9 @@
 #!/bin/bash
+
+# 先安装
+../build_out/custom_opp_ubuntu_aarch64.run
+
+
 export ASCEND_SLOG_PRINT_TO_STDOUT=0
 export ASCEND_GLOBAL_LOG_LEVEL=0
 
@@ -36,7 +41,7 @@ if [ ! $ASCEND_HOME_DIR ]; then
         export ASCEND_HOME_DIR=/usr/local/Ascend/ascend-toolkit/latest
     fi
 fi
-source $ASCEND_HOME_DIR/bin/setenv.bash
+#source $ASCEND_HOME_DIR/bin/setenv.bash
 
 export DDK_PATH=$ASCEND_HOME_DIR
 arch=$(uname -m)
@@ -75,8 +80,8 @@ function main {
     # 4. 运行可执行文件
     cd $CURRENT_DIR/output
     echo "INFO: execute op!"
-    msprof --application="execute_op" --output=./
-	
+    #msprof --application="execute_op" --output=./ --aic-metrics=ArithmeticUtilization
+    ./execute_op
 
     if [ $? -ne 0 ]; then
         echo "ERROR: acl executable run failed! please check your project!"
@@ -86,20 +91,12 @@ function main {
 
     # 5. 比较真值文件
     cd $CURRENT_DIR
-    ret_y=`python3 scripts/verify_result.py output/output_y.bin output/golden_y.bin` 
-    ret_mean=`python3 scripts/verify_result.py output/output_mean.bin output/golden_mean.bin` 
-    ret_variance=`python3 scripts/verify_result.py output/output_variance.bin output/golden_variance.bin` 
-   
-    if [ "x$ret_y" == "xtest pass" ]  && [ "x$ret_mean" == "xtest pass" ]  && [ "x$ret_variance" == "xtest pass" ]; then
+    ret=`python3 scripts/verify_result.py output/output.bin output/golden.bin` 
+    echo $ret
+    if [ "x$ret" == "xtest pass" ]; then
         echo ""
         echo "#####################################"
         echo "INFO: you have passed the Precision!"
-        echo "#####################################"
-        echo ""
-    else 
-        echo ""
-        echo "#####################################"
-        echo "INFO: Test Fail for Comparison y $ret_y, Comparison mean $ret_mean, Comparison variance $ret_variance "
         echo "#####################################"
         echo ""
     fi

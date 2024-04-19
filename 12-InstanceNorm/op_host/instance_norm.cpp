@@ -7,7 +7,7 @@ static ge::graphStatus TilingFunc(gert::TilingContext* context) {
     InstanceNormTilingData tiling;
 
     const gert::StorageShape* shape = context->GetInputShape(0);
-    uint32_t totalSize = 1;
+    uint64_t totalSize = 1;
     for (int i = 0; i < shape->GetStorageShape().GetDimNum(); i++) {
         totalSize *= shape->GetStorageShape().GetDim(i);
     }

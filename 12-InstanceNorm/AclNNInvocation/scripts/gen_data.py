@@ -6,7 +6,7 @@ import os
 
 def gen_golden_data_simple():
     shape = [3,1024, 1024,3]
-    data_format = "ND"
+    data_format = "NHWC"
     epsilon = 0
     dtype = np.float32
     

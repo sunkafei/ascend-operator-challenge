@@ -10,11 +10,11 @@ public:
     __aicore__ inline KernelAddcmul() {}
     __aicore__ inline void Init(GM_ADDR input_data, GM_ADDR x1, GM_ADDR x2, GM_ADDR value, GM_ADDR y, uint32_t totalLength, uint32_t ALIGN_NUM, uint32_t block_size, uint32_t core_size, uint32_t core_remain) {
         ASSERT(GetBlockNum() != 0 && "block dim can not be zero!");
-        this->blockLength = core_size + (GetBlockIdx() < core_remain);
+        this->blockLength = core_size + (GetBlockNum() == GetBlockIdx() + 1 ? 0 : core_remain);
         this->tileLength = block_size;
         this->blockLength = this->blockLength + (this->blockLength % ALIGN_NUM ? ALIGN_NUM - this->blockLength % ALIGN_NUM : 0);
 
-        auto startPointer = this->blockLength * GetBlockIdx() + (GetBlockIdx() < core_remain ? GetBlockIdx() : core_remain);
+        auto startPointer = core_size * GetBlockIdx();
         auto bufferlength = this->blockLength;
 
         Gm_input_data.SetGlobalBuffer((__gm__ TYPE_INPUT_DATA*)input_data + startPointer, bufferlength);

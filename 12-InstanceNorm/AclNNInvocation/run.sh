@@ -91,7 +91,7 @@ function main {
 
     # 5. 比较真值文件
     cd $CURRENT_DIR
-    ret=`python3 scripts/verify_result.py output/output_variance.bin output/golden_variance.bin` 
+    ret=`python3 scripts/verify_result.py output/output_y.bin output/golden_y.bin` 
     echo $ret
     if [ "x$ret" == "xtest pass" ]; then
         echo ""

@@ -5,12 +5,13 @@ constexpr int32_t BUFFER_NUM = 2;
 template<typename T> class KernelInstanceNorm {
 public:
     __aicore__ inline KernelInstanceNorm() {}
-    __aicore__ inline void Init(GM_ADDR x, GM_ADDR gamma, GM_ADDR beta, GM_ADDR y, GM_ADDR mean, GM_ADDR variance, uint64_t totalSize, uint64_t batchSize, uint64_t stepSize) {
+    __aicore__ inline void Init(GM_ADDR x, GM_ADDR gamma, GM_ADDR beta, GM_ADDR y, GM_ADDR mean, GM_ADDR variance, uint64_t totalSize, uint64_t batchSize, uint64_t stepSize, float epsilon) {
         ASSERT(GetBlockNum() != 0 && "block dim can not be zero!");
 
         this->totalSize = totalSize;
         this->batchSize = batchSize;
         this->stepSize = stepSize;
+        this->epsilon = epsilon;
         this->squareSize = totalSize / batchSize / stepSize;
         Gm_x.SetGlobalBuffer((__gm__ T*)x, totalSize);
         Gm_gamma.SetGlobalBuffer((__gm__ T*)gamma, totalSize);
@@ -45,14 +46,30 @@ public:
                 Gm_variance.SetValue(i * stepSize + j, (T)var);
             }
         }
+        for (uint64_t i = 0; i < batchSize; ++i) {
+            for (uint64_t j = 0; j < stepSize; ++j) {
+                float mean = Gm_mean.GetValue(i * stepSize + j);
+                float variance = Gm_variance.GetValue(i * stepSize + j);
+                float sum = 0.0;
+                for (uint64_t k = 0; k < squareSize; ++k) {
+                    auto index = i * squareSize * stepSize + k * stepSize + j;
+                    float x = Gm_x.GetValue(index);
+                    float gamma = Gm_gamma.GetValue(index);
+                    float beta = Gm_beta.GetValue(index);
+                    float result = gamma * ((x - mean) / sqrt(variance + epsilon)) + beta;
+                    Gm_y.SetValue(index, (T)result);
+                }
+            }
+        }
     }
 private:
     GlobalTensor<T> Gm_x, Gm_gamma, Gm_beta, Gm_y, Gm_mean, Gm_variance;
     uint64_t totalSize, batchSize, stepSize, squareSize;
+    float epsilon;
 };
 extern "C" __global__ __aicore__ void instance_norm(GM_ADDR x, GM_ADDR gamma, GM_ADDR beta, GM_ADDR y, GM_ADDR mean, GM_ADDR variance, GM_ADDR workspace, GM_ADDR tiling) {
     GET_TILING_DATA(tiling_data, tiling);
     KernelInstanceNorm<DTYPE_X> op;
-    op.Init(x, gamma, beta, y, mean, variance, tiling_data.totalSize, tiling_data.batchSize, tiling_data.stepSize);
+    op.Init(x, gamma, beta, y, mean, variance, tiling_data.totalSize, tiling_data.batchSize, tiling_data.stepSize, tiling_data.epsilon);
     op.Process();
 }

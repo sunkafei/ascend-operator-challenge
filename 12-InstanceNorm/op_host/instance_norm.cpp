@@ -33,6 +33,8 @@ static ge::graphStatus TilingFunc(gert::TilingContext* context) {
         tiling.set_batchSize(shape->GetStorageShape().GetDim(0) * shape->GetStorageShape().GetDim(1));
         tiling.set_stepSize(1);
     }
+    auto ptr = context->GetAttrs()->GetFloat(1);
+    tiling.set_epsilon(*ptr);
 
     context->SetBlockDim(1);
     tiling.SaveToBuffer(context->GetRawTilingData()->GetData(), context->GetRawTilingData()->GetCapacity());

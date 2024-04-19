@@ -29,6 +29,7 @@ static ge::graphStatus TilingFunc(gert::TilingContext* context) {
 
     uint32_t ALIGN_NUM = BLOCK_SIZE / sizeofdatatype;
     uint32_t tiling_size = ((ub_size) / BLOCK_SIZE / 2) / NUM;
+    tiling_size = tiling_size <= 8 ? tiling_size : tiling_size / 8 * 8;
 
     uint32_t block_size = tiling_size * ALIGN_NUM;
     aivNum = (aivNum < totalLength / block_size) ? aivNum : (totalLength / block_size);

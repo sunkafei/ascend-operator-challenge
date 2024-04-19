@@ -33,13 +33,15 @@ public:
     }
     __aicore__ inline void Process()
     {
-        LocalTensor<DTYPE_Y> zLocal = outQueueZ.AllocTensor<DTYPE_Y>(); LocalTensor<DTYPE_Y> zLocal2 = outQueueZ.AllocTensor<DTYPE_Y>();
-        DTYPE_Y zero = 0;
-        Duplicate(zLocal, zero, this->ALIGN_NUM);
-        outQueueZ.EnQue<DTYPE_Y>(zLocal); outQueueZ.EnQue<DTYPE_Y>(zLocal2);
-        zLocal = outQueueZ.DeQue<DTYPE_Y>(); zLocal2 = outQueueZ.DeQue<DTYPE_Y>();
-        DataCopy(zGm, zLocal, this->ALIGN_NUM);
-        outQueueZ.FreeTensor(zLocal); outQueueZ.FreeTensor(zLocal2);
+        if(GetBlockNum() == 0){
+            LocalTensor<DTYPE_Y> zLocal = outQueueZ.AllocTensor<DTYPE_Y>(); LocalTensor<DTYPE_Y> zLocal2 = outQueueZ.AllocTensor<DTYPE_Y>();
+            DTYPE_Y zero = 0;
+            Duplicate(zLocal, zero, this->ALIGN_NUM);
+            outQueueZ.EnQue<DTYPE_Y>(zLocal); outQueueZ.EnQue<DTYPE_Y>(zLocal2);
+            zLocal = outQueueZ.DeQue<DTYPE_Y>(); zLocal2 = outQueueZ.DeQue<DTYPE_Y>();
+            DataCopy(zGm, zLocal, this->ALIGN_NUM);
+            outQueueZ.FreeTensor(zLocal); outQueueZ.FreeTensor(zLocal2);
+        }
         // loop count need to be doubled, due to double buffer
         int32_t loopCount = this->tileNum;
         // tiling strategy, pipeline parallel
@@ -64,6 +66,12 @@ private:
         DTYPE_Y zero = 0;
         DataCopy(xLocal, xGm[progress * this->tileLength], length);
         DataCopy(yLocal, yGm[progress * this->tileLength], length);
+        /*if(progress + 1 == this->tileNum){
+            for(int i=length-this->lastpadding;i<length;i++){
+                xLocal.SetValue(i, 0);
+                yLocal.SetValue(i, 0);
+            }
+        }*/
         
         // enque input tensors to VECIN queue
         inQueueX.EnQue(xLocal);
@@ -95,7 +103,7 @@ private:
         // deque output tensor from VECOUT queue
         LocalTensor<DTYPE_Y> zLocal = outQueueZ.DeQue<DTYPE_Y>();
         // copy progress_th tile from local tensor to global tensor
-        SetAtomicAdd<float>();
+        SetAtomicAdd<DTYPE_Y>();
         DataCopy(zGm, zLocal, this->ALIGN_NUM);
         SetAtomicNone();
         // free output tensor for reuse

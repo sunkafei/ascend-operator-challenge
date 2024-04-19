@@ -17,6 +17,7 @@ static ge::graphStatus TilingFunc(gert::TilingContext* context)
     uint64_t ub_size;
     ascendcPlatform.GetCoreMemSize(platform_ascendc::CoreMemType::UB, ub_size);
     auto aivNum = ascendcPlatform.GetCoreNum();
+    aivNum = 1;
 
     uint32_t totalLength = context->GetInputTensor(0)->GetShapeSize();
     auto dt = context->GetInputTensor(0)->GetDataType();
@@ -37,6 +38,7 @@ static ge::graphStatus TilingFunc(gert::TilingContext* context)
 
     uint32_t ALIGN_NUM = BLOCK_SIZE / sizeofdatatype;
     uint32_t tiling_size = ((ub_size) / BLOCK_SIZE / 2) / NUM;
+    tiling_size = tiling_size <= 8 ? tiling_size : tiling_size / 8 * 8;
 
     uint32_t block_size = tiling_size * ALIGN_NUM;
     aivNum = (aivNum < totalLength / block_size) ? aivNum : (totalLength / block_size);

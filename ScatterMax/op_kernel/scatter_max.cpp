@@ -26,7 +26,6 @@ public:
         this->tileNum = this->lastdim / this->tileLength + (this->lastdim % this->tileLength > 0);
 
         // pipe alloc memory to queue, the unit is Bytes
-        pipe.InitBuffer(inQueueQ, 1, 8 * sizeof(int32_t));
         pipe.InitBuffer(inQueueX, BUFFER_NUM, this->tileLength * sizeof(DTYPE_VAR));
         pipe.InitBuffer(inQueueY, BUFFER_NUM, this->tileLength * sizeof(int32_t));
         pipe.InitBuffer(inQueueD, BUFFER_NUM, this->tileLength * sizeof(DTYPE_VAR));
@@ -36,11 +35,7 @@ public:
     {
         // loop count need to be doubled, due to double buffer
         for(int32_t j = 0; j < this->blockLength; j++){
-            LocalTensor<DTYPE_INDICES> qLocal = inQueueQ.AllocTensor<DTYPE_INDICES>();
-            DataCopy(qLocal, yGm[j], 8);
-            inQueueQ.EnQue(qLocal);
-            qLocal = inQueueQ.DeQue<DTYPE_INDICES>();
-            DTYPE_INDICES p = qLocal.GetValue(0);
+            DTYPE_INDICES p = yGm.GetValue(j);
             // tiling strategy, pipeline parallel
             int32_t loopCount = this->tileNum;
             for (int32_t i = 0; i < loopCount-1; i++) {
@@ -54,9 +49,6 @@ public:
             CopyIn(p, j, loopCount - 1, length, padding);
             Compute(loopCount - 1, length);
             CopyOut(p, loopCount - 1, length);
-
-
-            inQueueQ.FreeTensor(qLocal);
         }
         
     }
@@ -106,7 +98,7 @@ private:
 private:
     TPipe pipe;
     // create queues for input, in this case depth is equal to buffer num
-    TQue<QuePosition::VECIN, BUFFER_NUM> inQueueX, inQueueY, inQueueD, inQueueQ;
+    TQue<QuePosition::VECIN, BUFFER_NUM> inQueueX, inQueueY, inQueueD;
     // create queue for output, in this case depth is equal to buffer num
     TQue<QuePosition::VECOUT, BUFFER_NUM> outQueueZ;
     GlobalTensor<DTYPE_VAR> xGm;

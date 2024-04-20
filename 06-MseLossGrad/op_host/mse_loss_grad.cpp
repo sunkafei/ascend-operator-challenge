@@ -35,6 +35,12 @@ static ge::graphStatus TilingFunc(gert::TilingContext* context)
         tiling.set_divnum(2.0);
     }
 
+    if(context->GetInputTensor(2)->GetShapeSize() == 1) {
+        context->SetTilingKey(1);
+    }else{
+        context->SetTilingKey(2);
+    }
+
     uint32_t ALIGN_NUM = BLOCK_SIZE / sizeofdatatype;
     uint32_t tiling_size = ((ub_size) / BLOCK_SIZE / 2) / NUM;
     tiling_size = tiling_size <= 8 ? tiling_size : tiling_size / 8 * 8;

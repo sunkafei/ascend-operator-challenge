@@ -5,7 +5,7 @@ import numpy as np
 import os
 import tensorflow as tf
 def gen_golden_data_simple():
-    input_x = np.random.uniform(1, 10, [8, 2048]).astype(np.float16)
+    input_x = np.random.uniform(1, 10, [7, 2045]).astype(np.float16)
     clip_value_min = np.random.uniform(1, 3, [1]).astype(np.float16)
     clip_value_max = np.random.uniform(4, 10, [1]).astype(np.float16)
     y = tf.clip_by_value(input_x, clip_value_min, clip_value_max)

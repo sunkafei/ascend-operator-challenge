@@ -21,7 +21,7 @@ else ()
     message(STATUS "env INC_PATH: ${INC_PATH}")
 endif()
 
-set(CUST_PKG_PATH "${INC_PATH}/opp/vendors/sunmingzhi/op_api")
+set(CUST_PKG_PATH "${INC_PATH}/opp/vendors/customize/op_api")
 set(BUILT_PKG_PATH "${INC_PATH}/opp/built-in/op_impl/ai_core/tbe/op_api")
 
 set(LIB_PATH $ENV{NPU_HOST_LIB})

@@ -8,7 +8,7 @@ public:
     __aicore__ inline void Init(GM_ADDR var, GM_ADDR indices, GM_ADDR updates, uint32_t lastdim, uint32_t totalLength, uint32_t ALIGN_NUM, uint32_t block_size, uint32_t core_size, uint32_t core_remain)
     {
         ASSERT(GetBlockNum() != 0 && "block dim can not be zero!");
-        this->blockLength = core_size + (GetBlockNum() == GetBlockIdx() + 1 ? 0 : core_remain);
+        this->blockLength = core_size + (GetBlockNum() == GetBlockIdx() + 1 ? core_remain : 0);
         this->tileLength = block_size;
         this->lastdim = lastdim;
         this->totalLength = totalLength;

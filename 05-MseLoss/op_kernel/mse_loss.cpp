@@ -8,7 +8,7 @@ public:
     __aicore__ inline void Init(GM_ADDR predict, GM_ADDR label, GM_ADDR y, float divnum, uint32_t totalLength, uint32_t ALIGN_NUM, uint32_t block_size, uint32_t core_size, uint32_t core_remain)
     {
         ASSERT(GetBlockNum() != 0 && "block dim can not be zero!");
-        this->blockLength = core_size + (GetBlockNum() == GetBlockIdx() + 1 ? 0 : core_remain);
+        this->blockLength = core_size + (GetBlockNum() == GetBlockIdx() + 1 ? core_remain : 0);
         this->tileLength = block_size;
         this->divnum = divnum;
         this->ALIGN_NUM = ALIGN_NUM;
@@ -33,7 +33,7 @@ public:
     }
     __aicore__ inline void Process()
     {
-        if(GetBlockNum() == 0){
+        if(GetBlockIdx() == 0){
             LocalTensor<DTYPE_Y> zLocal = outQueueZ.AllocTensor<DTYPE_Y>(); LocalTensor<DTYPE_Y> zLocal2 = outQueueZ.AllocTensor<DTYPE_Y>();
             DTYPE_Y zero = 0;
             Duplicate(zLocal, zero, this->ALIGN_NUM);

@@ -28,7 +28,7 @@ public:
         // pipe alloc memory to queue, the unit is Bytes
         pipe.InitBuffer(inQueueX, BUFFER_NUM, this->tileLength * sizeof(DTYPE_Y));
         pipe.InitBuffer(inQueueY, BUFFER_NUM, this->tileLength * sizeof(DTYPE_Y));
-        pipe.InitBuffer(outQueueZ, BUFFER_NUM, ALIGN_NUM * sizeof(DTYPE_Y));
+        pipe.InitBuffer(outQueueZ, BUFFER_NUM, this->tileLength * sizeof(DTYPE_Y));
         pipe.InitBuffer(tmpBuffer, this->tileLength * sizeof(DTYPE_Y));
     }
     __aicore__ inline void Process()
@@ -47,7 +47,7 @@ public:
         // tiling strategy, pipeline parallel
         for (int32_t i = 0; i < loopCount-1; i++) {
             CopyIn(i, this->tileLength);
-            Compute(i, this->tileLength);
+            ComputeFull(i, this->tileLength);
             CopyOut(i);
         }
         auto length = this->blockLength - this->tileLength * (loopCount - 1);
@@ -87,9 +87,33 @@ private:
 
         Sub(yLocal, xLocal, yLocal, length);
         Mul(yLocal, yLocal, yLocal, length);
-        ReduceSum(xLocal, yLocal, tmp, length);
-        Muls(xLocal, xLocal, this->divnum, this->ALIGN_NUM);
-        DataCopy(zLocal, xLocal, this->ALIGN_NUM);
+        ReduceSum(zLocal, yLocal, tmp, length);
+        Muls(zLocal, zLocal, this->divnum, this->ALIGN_NUM);
+
+
+        // enque the output tensor to VECOUT queue
+        outQueueZ.EnQue<DTYPE_Y>(zLocal);
+        // free input tensors for reuse
+        inQueueX.FreeTensor(xLocal);
+        inQueueY.FreeTensor(yLocal);
+    }
+    __aicore__ inline void ComputeFull(int32_t progress, uint32_t length)
+    {
+        // deque input tensors from VECIN queue
+        LocalTensor<DTYPE_Y> xLocal = inQueueX.DeQue<DTYPE_Y>();
+        LocalTensor<DTYPE_Y> yLocal = inQueueY.DeQue<DTYPE_Y>();
+        LocalTensor<DTYPE_Y> zLocal = outQueueZ.AllocTensor<DTYPE_Y>();
+        LocalTensor<DTYPE_Y> tmp = tmpBuffer.Get<DTYPE_Y>();
+
+        Sub(yLocal, xLocal, yLocal, length);
+        Mul(yLocal, yLocal, yLocal, length);
+        // ReduceSum(zLocal, yLocal, tmp, length);
+        uint64_t mask = this->ALIGN_NUM * 8;
+        uint64_t repeat = (length + mask - 1) / mask;
+        WholeReduceSum<DTYPE_Y>(zLocal, yLocal, mask, repeat, 1, 1, 8);
+        WholeReduceSum<DTYPE_Y>(zLocal, zLocal, repeat, 1, 1, 1, 8);
+
+        Muls(zLocal, zLocal, this->divnum, this->ALIGN_NUM);
 
 
         // enque the output tensor to VECOUT queue

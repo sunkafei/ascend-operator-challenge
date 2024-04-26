@@ -26,12 +26,7 @@ static ge::graphStatus TilingFunc(gert::TilingContext* context)
         sizeofdatatype = 4;
     }
 
-    const gert::Shape vec = context->GetInputShape(0)->GetOriginShape();
-    if(vec.GetDimNum() == 1){
-        tiling.set_lastdim(1);
-    }else{
-        tiling.set_lastdim(vec.GetDim(vec.GetDimNum() - 1));
-    }
+    tiling.set_lastdim(context->GetInputTensor(2)->GetShapeSize() / context->GetInputTensor(1)->GetShapeSize());
 
     uint32_t totalLength = context->GetInputTensor(1)->GetShapeSize();
 
@@ -84,19 +79,19 @@ public:
     {
         this->Input("var")
             .ParamType(REQUIRED)
-            .DataType({ge::DT_FLOAT, ge::DT_FLOAT16, ge::DT_INT32})
-            .Format({ge::FORMAT_ND, ge::FORMAT_ND, ge::FORMAT_ND})
-            .UnknownShapeFormat({ge::FORMAT_ND, ge::FORMAT_ND, ge::FORMAT_ND});
+            .DataType({ge::DT_FLOAT, ge::DT_FLOAT16, ge::DT_INT32, ge::DT_INT8})
+            .Format({ge::FORMAT_ND, ge::FORMAT_ND, ge::FORMAT_ND, ge::FORMAT_ND})
+            .UnknownShapeFormat({ge::FORMAT_ND, ge::FORMAT_ND, ge::FORMAT_ND, ge::FORMAT_ND});
         this->Input("indices")
             .ParamType(REQUIRED)
-            .DataType({ge::DT_INT32, ge::DT_INT32, ge::DT_INT32})
-            .Format({ge::FORMAT_ND, ge::FORMAT_ND, ge::FORMAT_ND})
-            .UnknownShapeFormat({ge::FORMAT_ND, ge::FORMAT_ND, ge::FORMAT_ND});
+            .DataType({ge::DT_INT32, ge::DT_INT32, ge::DT_INT32, ge::DT_INT32})
+            .Format({ge::FORMAT_ND, ge::FORMAT_ND, ge::FORMAT_ND, ge::FORMAT_ND})
+            .UnknownShapeFormat({ge::FORMAT_ND, ge::FORMAT_ND, ge::FORMAT_ND, ge::FORMAT_ND});
         this->Input("updates")
             .ParamType(REQUIRED)
-            .DataType({ge::DT_FLOAT, ge::DT_FLOAT16, ge::DT_INT32})
-            .Format({ge::FORMAT_ND, ge::FORMAT_ND, ge::FORMAT_ND})
-            .UnknownShapeFormat({ge::FORMAT_ND, ge::FORMAT_ND, ge::FORMAT_ND});
+            .DataType({ge::DT_FLOAT, ge::DT_FLOAT16, ge::DT_INT32, ge::DT_INT8})
+            .Format({ge::FORMAT_ND, ge::FORMAT_ND, ge::FORMAT_ND, ge::FORMAT_ND})
+            .UnknownShapeFormat({ge::FORMAT_ND, ge::FORMAT_ND, ge::FORMAT_ND, ge::FORMAT_ND});
         this->Attr("use_locking").AttrType(OPTIONAL).Bool(false);
 
         this->SetInferShape(ge::InferShape);

@@ -60,6 +60,7 @@ private:
         LocalTensor<DTYPE_X> tmp = tmpBuffer.Get<DTYPE_X>();
 
         DTYPE_X c1 = 0.851, c2 = -1.702, c3 = 1.0;
+        DTYPE_X zero = 0.0;
 
         // x*e^(0.851)*(x-|x|)/(1+e^(-1.702|x|))
 
@@ -68,12 +69,16 @@ private:
         Exp(yLocal, yLocal, length);
         Adds(yLocal, yLocal, c3, length);
 
-        Sub(tmp, xLocal, tmp, length);
+        Mins(xLocal, xLocal, zero, length);
+        Div(yLocal, tmp, yLocal, length);
+        Add(yLocal, yLocal, xLocal, length);
+
+        /*Sub(tmp, xLocal, tmp, length);
         Muls(tmp, tmp, c1, length);
         Exp(tmp, tmp, length);
 
         Div(yLocal, xLocal, yLocal, length);
-        Mul(yLocal, tmp, yLocal, length);
+        Mul(yLocal, tmp, yLocal, length);*/
 
         // enque the output tensor to VECOUT queue
         outQueueY.EnQue<DTYPE_Y>(yLocal);

@@ -26,12 +26,7 @@ static ge::graphStatus TilingFunc(gert::TilingContext* context)
         sizeofdatatype = 4;
     }
 
-    const gert::Shape vec = context->GetInputShape(0)->GetOriginShape();
-    if(vec.GetDimNum() == 1){
-        tiling.set_lastdim(1);
-    }else{
-        tiling.set_lastdim(vec.GetDim(vec.GetDimNum() - 1));
-    }
+    tiling.set_lastdim(context->GetInputTensor(2)->GetShapeSize() / context->GetInputTensor(1)->GetShapeSize());
 
     uint32_t totalLength = context->GetInputTensor(1)->GetShapeSize();
 

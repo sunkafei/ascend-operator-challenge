@@ -8,11 +8,11 @@ def gen_golden_data_simple():
     shape = [3, 1024, 1024,3]
     data_format = "ND"
     epsilon = 0
-    dtype = np.float32
+    dtype = np.float16
     
-    x = np.random.uniform(1, 10, shape).astype(dtype)
-    gamma = np.random.uniform(1, 10, shape).astype(dtype)
-    beta = np.random.uniform(1, 10, shape).astype(dtype)
+    x = np.random.uniform(-10, 10, shape).astype(dtype)
+    gamma = np.random.uniform(-10, 10, shape).astype(dtype)
+    beta = np.random.uniform(-10, 10, shape).astype(dtype)
     shape_x = x.shape
     axis = []
     if data_format in ("NDHWC",):

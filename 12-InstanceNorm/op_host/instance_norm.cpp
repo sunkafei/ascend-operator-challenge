@@ -51,14 +51,14 @@ static ge::graphStatus TilingFunc(gert::TilingContext* context) {
     tiling.set_batchSize(batchSize);
     tiling.set_stepSize(stepSize);
 
-    for (int i = 0; i < 3; ++i) {
+    /*for (int i = 0; i < 3; ++i) {
         std::cout << batchSize[i] << " ";
     }
     std::cout << std::endl;
     for (int i = 0; i < 3; ++i) {
         std::cout << stepSize[i] << " ";
     }
-    std::cout << std::endl;
+    std::cout << std::endl;*/
 
     context->SetBlockDim(1);
     tiling.SaveToBuffer(context->GetRawTilingData()->GetData(), context->GetRawTilingData()->GetCapacity());

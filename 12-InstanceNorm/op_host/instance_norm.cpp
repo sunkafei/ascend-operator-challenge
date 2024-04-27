@@ -1,40 +1,64 @@
 
 #include "instance_norm_tiling.h"
 #include "register/op_def_registry.h"
+#include <vector>
+#include <cstring>
+#include <cstdlib>
 
 namespace optiling {
 static ge::graphStatus TilingFunc(gert::TilingContext* context) {
     InstanceNormTilingData tiling;
 
-    const gert::StorageShape* shape = context->GetInputShape(0);
-    uint64_t totalSize = 1;
-    for (int i = 0; i < shape->GetStorageShape().GetDimNum(); i++) {
-        totalSize *= shape->GetStorageShape().GetDim(i);
-    }
-    tiling.set_totalSize(totalSize);
-    const char *str = context->GetAttrs()->GetAttrPointer<char>(0);
-    if (strcmp(str, "NDHWC") == 0) {
-        tiling.set_batchSize(shape->GetStorageShape().GetDim(0));
-        tiling.set_stepSize(shape->GetStorageShape().GetDim(4));
-    }
-    else if(strcmp(str, "NCDHW") == 0) {
-        tiling.set_batchSize(shape->GetStorageShape().GetDim(0) * shape->GetStorageShape().GetDim(1));
-        tiling.set_stepSize(1);
-    }
-    else if(strcmp(str, "NHWC") == 0) {
-        tiling.set_batchSize(shape->GetStorageShape().GetDim(0));
-        tiling.set_stepSize(shape->GetStorageShape().GetDim(3));
-    }
-    else if(strcmp(str, "NCHW") == 0) {
-        tiling.set_batchSize(shape->GetStorageShape().GetDim(0) * shape->GetStorageShape().GetDim(1));
-        tiling.set_stepSize(1);
-    }
-    else { // ND
-        tiling.set_batchSize(shape->GetStorageShape().GetDim(0) * shape->GetStorageShape().GetDim(1));
-        tiling.set_stepSize(1);
+    uint64_t totalSize[3] = {};
+    uint64_t batchSize[3] = {};
+    uint64_t stepSize[3] = {};
+    uint64_t length = 0;
+    for (int i = 0; i < 3; ++i)
+        length = std::max<uint64_t>(length, context->GetInputShape(i)->GetStorageShape().GetDimNum());
+    for (int i = 0; i < 3; ++i) {
+        totalSize[i] = context->GetInputTensor(i)->GetShapeSize();
+        const gert::StorageShape* shape = context->GetInputShape(i);
+        const char *str = context->GetAttrs()->GetAttrPointer<char>(0);
+        std::vector<uint64_t> dim(length, 1);
+        int n = length;
+        for (int j = shape->GetStorageShape().GetDimNum() - 1; j >= 0; --j) {
+            dim[--n] = shape->GetStorageShape().GetDim(j);
+        }
+        if (strcmp(str, "NDHWC") == 0) {
+            batchSize[i] = dim[0];
+            stepSize[i] = dim[4];
+        }
+        else if(strcmp(str, "NCDHW") == 0) {
+            batchSize[i] = dim[0] * dim[1];
+            stepSize[i] = 1;
+        }
+        else if(strcmp(str, "NHWC") == 0) {
+            batchSize[i] = dim[0];
+            stepSize[i] = dim[3];
+        }
+        else if(strcmp(str, "NCHW") == 0) {
+            batchSize[i] = dim[0] * dim[1];
+            stepSize[i] = 1;
+        }
+        else { // ND
+            batchSize[i] = dim[0] * dim[1];
+            stepSize[i] = 1;
+        }
     }
     auto ptr = context->GetAttrs()->GetFloat(1);
     tiling.set_epsilon(*ptr);
+    tiling.set_totalSize(totalSize);
+    tiling.set_batchSize(batchSize);
+    tiling.set_stepSize(stepSize);
+
+    for (int i = 0; i < 3; ++i) {
+        std::cout << batchSize[i] << " ";
+    }
+    std::cout << std::endl;
+    for (int i = 0; i < 3; ++i) {
+        std::cout << stepSize[i] << " ";
+    }
+    std::cout << std::endl;
 
     context->SetBlockDim(1);
     tiling.SaveToBuffer(context->GetRawTilingData()->GetData(), context->GetRawTilingData()->GetCapacity());

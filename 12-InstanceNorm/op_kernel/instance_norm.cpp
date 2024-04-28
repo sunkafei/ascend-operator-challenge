@@ -134,28 +134,29 @@ public:
         Gm_mean.SetGlobalBuffer((__gm__ T*)mean, maxbatchSize);
         Gm_variance.SetGlobalBuffer((__gm__ T*)variance, maxbatchSize);
         pipe.InitBuffer(Q_x, BUFFER_NUM, this->tileLength * sizeof(T));
-        pipe.InitBuffer(Q_gamma, BUFFER_NUM, this->tileLength * sizeof(T)); //todo
-        pipe.InitBuffer(Q_beta, BUFFER_NUM, this->tileLength * sizeof(T));
+        pipe.InitBuffer(Q_tmp, BUFFER_NUM, this->tileLength * sizeof(T) * 2); //todo
         pipe.InitBuffer(Q_y, BUFFER_NUM, this->tileLength * sizeof(T));
         pipe.InitBuffer(Q_mean, 1, this->maxbatchSize * sizeof(T));
         pipe.InitBuffer(Q_variance, 1, this->maxbatchSize * sizeof(T));
     }
-    __aicore__ inline void Process() { // 2281
+    __aicore__ inline void Process() { // 1920
         auto cof = T(1.0f / maxsquareSize);
         LocalTensor<T> mean = Q_mean.AllocTensor<T>();
+        packNumber *= 2;
+        tileLength *= 2;
         for (uint64_t i = 0; i < maxbatchSize; i += packNumber) {
             {
-                LocalTensor<T> x = Q_x.AllocTensor<T>();
+                LocalTensor<T> x = Q_tmp.AllocTensor<T>();
                 DataCopy(x, Gm_x[i * maxsquareSize], tileLength);
-                Q_x.EnQue(x);
+                Q_tmp.EnQue(x);
             }
             {
-                LocalTensor<T> x = Q_x.DeQue<T>();
-                Muls(x, x, cof, tileLength);
+                LocalTensor<T> x = Q_tmp.DeQue<T>();
                 GroupReduce(mean[i], x, maxsquareSize, packNumber);
-                Q_x.FreeTensor(x);
+                Q_tmp.FreeTensor(x);
             }
         }
+        Muls(mean, mean, cof, maxbatchSize);
         Q_mean.EnQue(mean);
         LocalTensor<T> mean_out = Q_mean.DeQue<T>();
         DataCopy(Gm_mean, mean_out, maxbatchSize);
@@ -164,12 +165,12 @@ public:
         LocalTensor<T> variance = Q_variance.AllocTensor<T>();
         for (uint64_t i = 0; i < maxbatchSize; i += packNumber) {
             {
-                LocalTensor<T> x = Q_x.AllocTensor<T>();
+                LocalTensor<T> x = Q_tmp.AllocTensor<T>();
                 DataCopy(x, Gm_x[i * maxsquareSize], tileLength);
-                Q_x.EnQue(x);
+                Q_tmp.EnQue(x);
             }
             {
-                LocalTensor<T> x = Q_x.DeQue<T>();
+                LocalTensor<T> x = Q_tmp.DeQue<T>();
                 for (int j = 0; j < packNumber; ++j) {
                     float avg = mean.GetValue(i + j);
                     Adds(x[j * maxsquareSize], x[j * maxsquareSize], T(-avg), maxsquareSize);
@@ -177,61 +178,60 @@ public:
                 Mul(x, x, x, tileLength);
                 Muls(x, x, cof, tileLength);
                 GroupReduce(variance[i], x, maxsquareSize, packNumber);
-                Q_x.FreeTensor(x);
+                Q_tmp.FreeTensor(x);
             }
         }
         Q_variance.EnQue(variance);
         LocalTensor<T> variance_out = Q_variance.DeQue<T>();
         DataCopy(Gm_variance, variance_out, maxbatchSize);
         Q_variance.FreeTensor(variance_out);
+        packNumber /= 2;
+        tileLength /= 2;
 
-        for (uint64_t i = 0; i < maxbatchSize; i += packNumber) {
+        for (uint64_t z = 0; z < batchSize[1]; z += packNumber) {
             {
-                LocalTensor<T> x = Q_x.AllocTensor<T>();
-                LocalTensor<T> gamma = Q_gamma.AllocTensor<T>();
-                LocalTensor<T> beta = Q_beta.AllocTensor<T>();
-                DataCopy(x, Gm_x[i * maxsquareSize], tileLength);
-                for (int j = 0; j < packNumber; ++j) {
-                    int k = i + j;
-                    DataCopy(gamma[j * maxsquareSize], Gm_gamma[k % batchSize[1] * maxsquareSize], maxsquareSize);
-                    DataCopy(beta[j * maxsquareSize], Gm_beta[k % batchSize[2] * maxsquareSize], maxsquareSize);
-                }
-                Q_x.EnQue(x);
-                Q_gamma.EnQue(gamma);
-                Q_beta.EnQue(beta);
+                LocalTensor<T> tmp = Q_tmp.AllocTensor<T>();
+                DataCopy(tmp, Gm_gamma[z * maxsquareSize], tileLength);
+                DataCopy(tmp[tileLength], Gm_beta[z * maxsquareSize], tileLength);
+                Q_tmp.EnQue(tmp);
             }
-            {
-                LocalTensor<T> y = Q_y.AllocTensor<T>();
-                LocalTensor<T> x = Q_x.DeQue<T>();
-                LocalTensor<T> gamma = Q_gamma.DeQue<T>();
-                LocalTensor<T> beta = Q_beta.DeQue<T>();
-                for (int j = 0; j < packNumber; ++j) {
-                    float avg = mean.GetValue(i + j);
-                    float var = variance.GetValue(i + j);
-                    float deno = 1.0f / sqrt(var + epsilon);
-                    Adds(x[j * maxsquareSize], x[j * maxsquareSize], T(-avg), maxsquareSize);
-                    Muls(x[j * maxsquareSize], x[j * maxsquareSize], T(deno), maxsquareSize);
+            LocalTensor<T> tmp = Q_tmp.DeQue<T>();
+            for (uint64_t i = z; i < maxbatchSize; i += batchSize[1]) {
+                {
+                    LocalTensor<T> x = Q_x.AllocTensor<T>();
+                    DataCopy(x, Gm_x[i * maxsquareSize], tileLength);
+                    Q_x.EnQue(x);
                 }
-                //Adds(x, x, T(-avg), tileLength); // (x - mean)
-                //Muls(x, x, T(deno), tileLength); // (x - mean) / sqrt(variance + epsilon)
-                Mul(x, x, gamma, tileLength); // gamma * (x - mean) / sqrt(variance + epsilon)
-                Add(y, x, beta, tileLength); // gamma * (x - mean) / sqrt(variance + epsilon) + beta
+                {
+                    LocalTensor<T> y = Q_y.AllocTensor<T>();
+                    LocalTensor<T> x = Q_x.DeQue<T>();
+                    for (int j = 0; j < packNumber; ++j) {
+                        float avg = mean.GetValue(i + j);
+                        float var = variance.GetValue(i + j);
+                        float deno = 1.0f / sqrt(var + epsilon);
+                        Adds(x[j * maxsquareSize], x[j * maxsquareSize], T(-avg), maxsquareSize);
+                        Muls(x[j * maxsquareSize], x[j * maxsquareSize], T(deno), maxsquareSize);
+                    }
+                    //Adds(x, x, T(-avg), tileLength); // (x - mean)
+                    //Muls(x, x, T(deno), tileLength); // (x - mean) / sqrt(variance + epsilon)
+                    Mul(x, x, tmp, tileLength); // gamma * (x - mean) / sqrt(variance + epsilon)
+                    Add(y, x, tmp[tileLength], tileLength); // gamma * (x - mean) / sqrt(variance + epsilon) + beta
 
-                Q_y.EnQue<T>(y);
-                Q_x.FreeTensor(x);
-                Q_gamma.FreeTensor(gamma);
-                Q_beta.FreeTensor(beta);
+                    Q_y.EnQue<T>(y);
+                    Q_x.FreeTensor(x);
+                }
+                {
+                    LocalTensor<T> y = Q_y.DeQue<T>();
+                    DataCopy(Gm_y[i * maxsquareSize], y, tileLength);
+                    Q_y.FreeTensor(y);
+                }
             }
-            {
-                LocalTensor<T> y = Q_y.DeQue<T>();
-                DataCopy(Gm_y[i * maxsquareSize], y, tileLength);
-                Q_y.FreeTensor(y);
-            }
+            Q_tmp.FreeTensor(tmp);
         }
     }
 private:
     TPipe pipe;
-    TQue<QuePosition::VECIN, BUFFER_NUM> Q_x, Q_gamma, Q_beta;
+    TQue<QuePosition::VECIN, BUFFER_NUM> Q_x, Q_tmp;
     TQue<QuePosition::VECOUT, BUFFER_NUM> Q_y, Q_mean, Q_variance;
     GlobalTensor<T> Gm_x, Gm_gamma, Gm_beta, Gm_y, Gm_mean, Gm_variance;
     uint64_t tileLength, packNumber;

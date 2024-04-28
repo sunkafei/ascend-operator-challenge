@@ -87,16 +87,16 @@ private:
         else {
             Or(tmp.ReinterpretCast<uint16_t>(), xLocal.ReinterpretCast<uint16_t>(), signbit.ReinterpretCast<uint16_t>(), length);  
         }
-        zLocal = xLocal + tmp;                // 1.702(x-|x|)
+        Add(zLocal, xLocal, tmp, length);     // 1.702(x-|x|)
         Exp(zLocal, zLocal, length);          // e^(1.702(x-|x|))
         Exp(tmp, tmp, length);                // e^(-1.702|x|)
-        xLocal = xLocal * tmp;                // 1.702xe^(-1.702|x|)
-        xLocal = xLocal + tmp;                // e^(-1.702|x|) + 1.702xe^(-1.702|x|)
-        zLocal = xLocal + zLocal;             // e^(-1.702|x|) + 1.702xe^(-1.702|x|) + e^(1.702(x-|x|))
+        Mul(xLocal, xLocal, tmp, length);     // 1.702xe^(-1.702|x|)
+        Add(xLocal, xLocal, tmp, length);     // e^(-1.702|x|) + 1.702xe^(-1.702|x|)
+        Add(zLocal, xLocal, zLocal, length);  // e^(-1.702|x|) + 1.702xe^(-1.702|x|) + e^(1.702(x-|x|))
         Adds(tmp, tmp, c3, length);           // e^(-1.702|x|) + 1
-        tmp = tmp * tmp;                      // (e^(-1.702|x|) + 1)^2
-        zLocal = zLocal / tmp;
-        zLocal = zLocal * dyLocal;
+        Mul(tmp, tmp, tmp, length);           // (e^(-1.702|x|) + 1)^2
+        Div(zLocal, zLocal, tmp, length);
+        Mul(zLocal, zLocal, dyLocal, length);
 
         // enque the output tensor to VECOUT queue
         outQueueZ.EnQue<DTYPE_Z>(zLocal);

@@ -5,10 +5,10 @@ import numpy as np
 import os
 
 def gen_golden_data_simple():
-    shape = [3, 1024, 1024,3]
+    shape = [3, 1024, 1024]
     data_format = "ND"
     epsilon = 0
-    dtype = np.float16
+    dtype = np.float32
     
     x = np.random.uniform(-10, 10, shape).astype(dtype)
     gamma = np.random.uniform(-10, 10, shape).astype(dtype)

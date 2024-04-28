@@ -27,6 +27,14 @@ public:
         pipe.InitBuffer(inQueueX, BUFFER_NUM, this->tileLength * sizeof(DTYPE_X));
         pipe.InitBuffer(outQueueZ, BUFFER_NUM, this->tileLength * sizeof(DTYPE_Z));
         pipe.InitBuffer(tmpBuffer, this->tileLength * sizeof(DTYPE_X));
+        pipe.InitBuffer(signbitBuffer, this->tileLength * sizeof(DTYPE_X));
+        this->signbit = signbitBuffer.Get<DTYPE_X>();
+        if constexpr (std::is_same_v<DTYPE_X, float>) {
+            Duplicate(signbit.ReinterpretCast<uint32_t>(), uint32_t(2147483648u), this->tileLength);
+        }
+        else {
+            Duplicate(signbit.ReinterpretCast<uint16_t>(), uint16_t(32768u), this->tileLength);
+        }
     }
     __aicore__ inline void Process()
     {
@@ -70,21 +78,25 @@ private:
         // div_up = e^(-1.702|x|) + 1.702xe^(-1.702|x|) + e^(1.702(x-|x|))
         // div_down = (e^(-1.702|x|)+1)^2
 
-        DTYPE_X c1 = -1.702, c2 = 1.702, c3 = 1.0;
+        DTYPE_X c1 = -1, c2 = 1.702, c3 = 1.0;
 
-        Abs(tmp, xLocal, length);
-        Muls(tmp, tmp, c1, length);           // -1.702|x|
-        Muls(xLocal, xLocal, c2, length);     // 1.702x
-        Add(zLocal, xLocal, tmp, length);     // 1.702(x-|x|)
+        Muls(xLocal, xLocal, c2, length);     // xLocal = 1.702x
+        if constexpr (std::is_same_v<DTYPE_X, float>) { // tmp = 1.702|x|
+            Or(tmp.ReinterpretCast<uint16_t>(), xLocal.ReinterpretCast<uint16_t>(), signbit.ReinterpretCast<uint16_t>(), length * 2);
+        }
+        else {
+            Or(tmp.ReinterpretCast<uint16_t>(), xLocal.ReinterpretCast<uint16_t>(), signbit.ReinterpretCast<uint16_t>(), length);  
+        }
+        zLocal = xLocal + tmp;                // 1.702(x-|x|)
         Exp(zLocal, zLocal, length);          // e^(1.702(x-|x|))
         Exp(tmp, tmp, length);                // e^(-1.702|x|)
-        Mul(xLocal, xLocal, tmp, length);     // 1.702xe^(-1.702|x|)
-        Add(xLocal, xLocal, tmp, length);     // e^(-1.702|x|) + 1.702xe^(-1.702|x|)
-        Add(zLocal, xLocal, zLocal, length);  // e^(-1.702|x|) + 1.702xe^(-1.702|x|) + e^(1.702(x-|x|))
+        xLocal = xLocal * tmp;                // 1.702xe^(-1.702|x|)
+        xLocal = xLocal + tmp;                // e^(-1.702|x|) + 1.702xe^(-1.702|x|)
+        zLocal = xLocal + zLocal;             // e^(-1.702|x|) + 1.702xe^(-1.702|x|) + e^(1.702(x-|x|))
         Adds(tmp, tmp, c3, length);           // e^(-1.702|x|) + 1
-        Mul(tmp, tmp, tmp, length);           // (e^(-1.702|x|) + 1)^2
-        Div(zLocal, zLocal, tmp, length);
-        Mul(zLocal, zLocal, dyLocal, length);
+        tmp = tmp * tmp;                      // (e^(-1.702|x|) + 1)^2
+        zLocal = zLocal / tmp;
+        zLocal = zLocal * dyLocal;
 
         // enque the output tensor to VECOUT queue
         outQueueZ.EnQue<DTYPE_Z>(zLocal);
@@ -104,7 +116,7 @@ private:
 
 private:
     TPipe pipe;
-    TBuf<QuePosition::VECCALC> tmpBuffer;
+    TBuf<QuePosition::VECCALC> tmpBuffer, signbitBuffer;
     // create queues for input, in this case depth is equal to buffer num
     TQue<QuePosition::VECIN, BUFFER_NUM> inQueueDY, inQueueX;
     // create queue for output, in this case depth is equal to buffer num
@@ -115,6 +127,7 @@ private:
     uint32_t blockLength;
     uint32_t tileNum;
     uint32_t tileLength;
+    LocalTensor<DTYPE_X> signbit;
 };
 
 extern "C" __global__ __aicore__ void fast_gelu_grad(GM_ADDR dy, GM_ADDR x, GM_ADDR z, GM_ADDR workspace, GM_ADDR tiling) {

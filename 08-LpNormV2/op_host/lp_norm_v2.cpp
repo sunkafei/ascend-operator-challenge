@@ -10,7 +10,7 @@ const uint32_t BLOCK_SIZE = 32;
 static ge::graphStatus TilingFunc(gert::TilingContext* context)
 {
     LpNormV2TilingData tiling;
-    constexpr int32_t NUM = 8;
+    int32_t NUM = 8;
     uint32_t sizeofdatatype;
     uint32_t totalLengthAligned;
     auto ascendcPlatform = platform_ascendc::PlatformAscendC(context->GetPlatformInfo());
@@ -28,6 +28,8 @@ static ge::graphStatus TilingFunc(gert::TilingContext* context)
     }else{
         sizeofdatatype = 4;
     }
+    
+    if(dt == ge::DT_FLOAT16) NUM = 16;
 
     auto p = context->GetAttrs()->GetFloat(0);
     tiling.set_p(*p);

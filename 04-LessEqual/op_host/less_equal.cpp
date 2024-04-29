@@ -4,7 +4,7 @@
 #include "tiling/platform/platform_ascendc.h"
 
 namespace optiling {
-const uint32_t BLOCK_SIZE = 256;
+const uint32_t BLOCK_SIZE = 32;
 static ge::graphStatus TilingFunc(gert::TilingContext* context) {
     LessEqualTilingData tiling;
     int32_t NUM = 24;

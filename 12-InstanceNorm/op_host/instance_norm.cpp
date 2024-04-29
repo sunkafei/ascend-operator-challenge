@@ -1,9 +1,11 @@
 
 #include "instance_norm_tiling.h"
 #include "register/op_def_registry.h"
+#include "tiling/platform/platform_ascendc.h"
 #include <vector>
 #include <cstring>
 #include <cstdlib>
+#include <algorithm>
 
 namespace optiling {
 static ge::graphStatus TilingFunc(gert::TilingContext* context) {
@@ -59,6 +61,33 @@ static ge::graphStatus TilingFunc(gert::TilingContext* context) {
         std::cout << stepSize[i] << " ";
     }
     std::cout << std::endl;*/
+    uint32_t sizeofdatatype;
+    auto dt = context->GetInputTensor(0)->GetDataType();
+    if (dt == ge::DT_FLOAT16 || dt == ge::DT_BF16) {
+        sizeofdatatype = 2;
+    }
+    else {
+        sizeofdatatype = 4;
+    }
+    auto ascendcPlatform = platform_ascendc::PlatformAscendC(context->GetPlatformInfo());
+    uint64_t ub_size;
+    ascendcPlatform.GetCoreMemSize(platform_ascendc::CoreMemType::UB, ub_size);
+    uint64_t maxtotalSize = std::max({totalSize[0], totalSize[1], totalSize[2]});
+    uint64_t maxbatchSize = std::max({batchSize[0], batchSize[1], batchSize[2]});
+    uint64_t rest = (ub_size / 2 / sizeofdatatype) - maxbatchSize * 2;
+    uint64_t packNumber = rest / (maxtotalSize / maxbatchSize * 4);
+    for (int i = 0; i < 20; ++i) {
+        if ((packNumber >> i) > 1) {
+            packNumber &= ~(1 << i);
+        }
+    }
+    while (maxbatchSize % packNumber) {
+        packNumber >>= 1;
+    }
+    tiling.set_packNumber(packNumber);
+    //std::cout << packNumber << std::endl;
+
+    //packNumber
 
     context->SetBlockDim(1);
     tiling.SaveToBuffer(context->GetRawTilingData()->GetData(), context->GetRawTilingData()->GetCapacity());

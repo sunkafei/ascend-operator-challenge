@@ -89,24 +89,30 @@ private:
     arg.FreeTensor(y1);
     arg.FreeTensor(y2);
 }*/
-template<typename T> __aicore__ inline void GroupReduce(const LocalTensor<T> &y, const LocalTensor<T> &x, uint32_t group_size, uint32_t group_count) {
+template<typename T> __aicore__ inline void GroupReduce(const LocalTensor<T> &y, const LocalTensor<T> &x, int32_t group_size, int32_t group_count) {
     static constexpr int32_t SIZE = sizeof(T);
-    static constexpr int32_t ALIGN = 32 / sizeof(T);
-    int32_t reduceCount = 256 / sizeof(T);
-    int32_t new_size = group_size / reduceCount;
-    if (new_size % ALIGN) {
-        reduceCount /= ALIGN / new_size;
+    static constexpr int32_t ALIGN = 32 / SIZE;
+    const int32_t factor = group_size / (group_size & -group_size);
+    int32_t number = (256 / SIZE) / factor;
+    number |= (number >> 1);
+    number |= (number >> 2);
+    number |= (number >> 4);
+    int32_t reduceCount = (number ^ (number >> 1)) * factor;
+    if (group_size / reduceCount > 1) {
+        if (group_size / reduceCount % ALIGN) {
+            reduceCount /= ALIGN * reduceCount / group_size;
+        }
+        int32_t repeatTimes = group_count * group_size / reduceCount;
+        int32_t repStride = (reduceCount * SIZE - 1) / 32 + 1;
+        WholeReduceSum(x, x, reduceCount, repeatTimes, 1, 1, repStride);
+        group_size /= reduceCount;
     }
-    int32_t repeatTimes = group_count * group_size / reduceCount;
-    int32_t repStride = (reduceCount * SIZE - 1) / 32 + 1;
-    WholeReduceSum(x, x, reduceCount, repeatTimes, 1, 1, repStride);
-    group_size /= reduceCount;
     WholeReduceSum(y, x, group_size, group_count, 1, 1, group_size * SIZE / 32);
 }
 template<typename T> class KernelInstanceNorm_Fast {
 public:
     __aicore__ inline KernelInstanceNorm_Fast() {}
-    __aicore__ inline void Init(GM_ADDR x, GM_ADDR gamma, GM_ADDR beta, GM_ADDR y, GM_ADDR mean, GM_ADDR variance, uint64_t totalSize[], uint64_t batchSize[], uint64_t stepSize[], float epsilon) {
+    __aicore__ inline void Init(GM_ADDR x, GM_ADDR gamma, GM_ADDR beta, GM_ADDR y, GM_ADDR mean, GM_ADDR variance, uint64_t totalSize[], uint64_t batchSize[], uint64_t stepSize[], float epsilon, uint64_t packNumber) {
         ASSERT(GetBlockNum() != 0 && "block dim can not be zero!");
         this->maxbatchSize = 0;
         this->maxstepSize = 0;
@@ -125,7 +131,7 @@ public:
         }
         this->epsilon = epsilon;
         this->maxsquareSize = maxtotalSize / maxbatchSize;
-        this->packNumber = 4;
+        this->packNumber = packNumber;
         this->tileLength = this->packNumber * this->maxsquareSize;
         Gm_x.SetGlobalBuffer((__gm__ T*)x, maxtotalSize);
         Gm_gamma.SetGlobalBuffer((__gm__ T*)gamma, maxtotalSize);
@@ -160,7 +166,6 @@ public:
         Q_mean.EnQue(mean);
         LocalTensor<T> mean_out = Q_mean.DeQue<T>();
         DataCopy(Gm_mean, mean_out, maxbatchSize);
-        Q_mean.FreeTensor(mean_out);
 
         LocalTensor<T> variance = Q_variance.AllocTensor<T>();
         for (uint64_t i = 0; i < maxbatchSize; i += packNumber) {
@@ -172,7 +177,7 @@ public:
             {
                 LocalTensor<T> x = Q_tmp.DeQue<T>();
                 for (int j = 0; j < packNumber; ++j) {
-                    float avg = mean.GetValue(i + j);
+                    float avg = mean_out.GetValue(i + j);
                     Adds(x[j * maxsquareSize], x[j * maxsquareSize], T(-avg), maxsquareSize);
                 }
                 Mul(x, x, x, tileLength);
@@ -184,11 +189,12 @@ public:
         Q_variance.EnQue(variance);
         LocalTensor<T> variance_out = Q_variance.DeQue<T>();
         DataCopy(Gm_variance, variance_out, maxbatchSize);
-        Q_variance.FreeTensor(variance_out);
+        
         packNumber /= 2;
         tileLength /= 2;
 
-        for (uint64_t z = 0; z < batchSize[1]; z += packNumber) {
+        uint64_t broadcastSize = batchSize[1] < batchSize[2] ? batchSize[1] : batchSize[2];
+        for (uint64_t z = 0; z < broadcastSize; z += packNumber) {
             {
                 LocalTensor<T> tmp = Q_tmp.AllocTensor<T>();
                 DataCopy(tmp, Gm_gamma[z * maxsquareSize], tileLength);
@@ -196,7 +202,7 @@ public:
                 Q_tmp.EnQue(tmp);
             }
             LocalTensor<T> tmp = Q_tmp.DeQue<T>();
-            for (uint64_t i = z; i < maxbatchSize; i += batchSize[1]) {
+            for (uint64_t i = z; i < maxbatchSize; i += broadcastSize) {
                 {
                     LocalTensor<T> x = Q_x.AllocTensor<T>();
                     DataCopy(x, Gm_x[i * maxsquareSize], tileLength);
@@ -206,8 +212,8 @@ public:
                     LocalTensor<T> y = Q_y.AllocTensor<T>();
                     LocalTensor<T> x = Q_x.DeQue<T>();
                     for (int j = 0; j < packNumber; ++j) {
-                        float avg = mean.GetValue(i + j);
-                        float var = variance.GetValue(i + j);
+                        float avg = mean_out.GetValue(i + j);
+                        float var = variance_out.GetValue(i + j);
                         float deno = 1.0f / sqrt(var + epsilon);
                         Adds(x[j * maxsquareSize], x[j * maxsquareSize], T(-avg), maxsquareSize);
                         Muls(x[j * maxsquareSize], x[j * maxsquareSize], T(deno), maxsquareSize);
@@ -228,6 +234,8 @@ public:
             }
             Q_tmp.FreeTensor(tmp);
         }
+        Q_mean.FreeTensor(mean_out);
+        Q_variance.FreeTensor(variance_out);
     }
 private:
     TPipe pipe;
@@ -241,14 +249,14 @@ private:
 };
 extern "C" __global__ __aicore__ void instance_norm(GM_ADDR x, GM_ADDR gamma, GM_ADDR beta, GM_ADDR y, GM_ADDR mean, GM_ADDR variance, GM_ADDR workspace, GM_ADDR tiling) {
     GET_TILING_DATA(tiling_data, tiling);
-    if (tiling_data.stepSize[0] > 1 || tiling_data.totalSize[0] / tiling_data.batchSize[0] * sizeof(DTYPE_X) % 256 != 0) { //todo?
+    if (tiling_data.stepSize[0] > 1 || tiling_data.totalSize[0] / tiling_data.batchSize[0] * sizeof(DTYPE_X) % 256 != 0) {
         KernelInstanceNorm<DTYPE_X> op;
         op.Init(x, gamma, beta, y, mean, variance, tiling_data.totalSize, tiling_data.batchSize, tiling_data.stepSize, tiling_data.epsilon);
         op.Process();
     }
     else {
         KernelInstanceNorm_Fast<DTYPE_X> op;
-        op.Init(x, gamma, beta, y, mean, variance, tiling_data.totalSize, tiling_data.batchSize, tiling_data.stepSize, tiling_data.epsilon);
+        op.Init(x, gamma, beta, y, mean, variance, tiling_data.totalSize, tiling_data.batchSize, tiling_data.stepSize, tiling_data.epsilon, tiling_data.packNumber);
         op.Process();
     }
 }

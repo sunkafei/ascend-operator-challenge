@@ -5,7 +5,7 @@ import numpy as np
 import os
 
 def gen_golden_data_simple():
-    shape = [3, 1024, 1024]
+    shape = [8, 3, 128*8]
     data_format = "ND"
     epsilon = 0
     dtype = np.float32

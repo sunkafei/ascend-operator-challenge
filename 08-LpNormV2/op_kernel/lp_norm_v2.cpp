@@ -290,39 +290,36 @@ public:
 
         // pipe alloc memory to queue, the unit is Bytes
         pipe.InitBuffer(inQueueX, BUFFER_NUM, this->tileLength * sizeof(T));
-        pipe.InitBuffer(outQueueZ, BUFFER_NUM, ALIGN_NUM * sizeof(T));
-        pipe.InitBuffer(tmpBuffer, this->tileLength * sizeof(float));
+        pipe.InitBuffer(SumQueue, 1, this->tileLength * sizeof(T));
+        pipe.InitBuffer(tmpBuffer, this->tileLength * sizeof(T));
     }
     __aicore__ inline void Process()
     {
-        LocalTensor<T> zLocal = outQueueZ.AllocTensor<T>(); LocalTensor<T> zLocal2 = outQueueZ.AllocTensor<T>();
+        LocalTensor<T> sum = SumQueue.AllocTensor<T>();
         T zero = 0;
-        Duplicate(zLocal, zero, this->ALIGN_NUM);
-        outQueueZ.EnQue<T>(zLocal); outQueueZ.EnQue<T>(zLocal2);
-        zLocal = outQueueZ.DeQue<T>(); zLocal2 = outQueueZ.DeQue<T>();
-        DataCopy(zGm, zLocal, this->ALIGN_NUM);
-        outQueueZ.FreeTensor(zLocal); outQueueZ.FreeTensor(zLocal2);
+        Duplicate(sum, zero, this->tileLength);
+        SumQueue.EnQue<T>(sum);
         // loop count need to be doubled, due to double buffer
         int32_t loopCount = this->tileNum;
         // tiling strategy, pipeline parallel
         for (int32_t i = 0; i < loopCount-1; i++) {
             CopyIn(i, this->tileLength);
-            ComputeFull(i, this->tileLength);
-            CopyOut(i);
+            Compute(i, this->tileLength);
         }
         auto length = this->blockLength - this->tileLength * (loopCount - 1);
         CopyIn(loopCount - 1, length);
         Compute(loopCount - 1, length - this->lastpadding);
-        CopyOut(loopCount - 1);
 
-        
-        zLocal = outQueueZ.AllocTensor<T>(); zLocal2 = outQueueZ.AllocTensor<T>();
-        DataCopy(zLocal, zGm, this->ALIGN_NUM);
-        Sqrt(zLocal, zLocal, 1);
-        outQueueZ.EnQue<T>(zLocal); outQueueZ.EnQue<T>(zLocal2);
-        zLocal = outQueueZ.DeQue<T>(); zLocal2 = outQueueZ.DeQue<T>();
-        DataCopy(zGm, zLocal, this->ALIGN_NUM);
-        outQueueZ.FreeTensor(zLocal); outQueueZ.FreeTensor(zLocal2);
+        {
+            LocalTensor<T> sum = SumQueue.DeQue<T>();
+            LocalTensor<T> tmp = tmpBuffer.Get<T>();
+            ReduceSum(sum, sum, tmp, this->tileLength);
+            Sqrt(sum, sum, 1);
+            SumQueue.EnQue<T>(sum);
+            sum = SumQueue.DeQue<T>();
+            DataCopy(zGm, sum, this->ALIGN_NUM);
+            SumQueue.FreeTensor(sum);
+        }
     }
 
 private:
@@ -339,73 +336,22 @@ private:
     {
         // deque input tensors from VECIN queue
         LocalTensor<T> xLocal = inQueueX.DeQue<T>();
-        LocalTensor<T> zLocal = outQueueZ.AllocTensor<T>();
+        LocalTensor<T> sum = SumQueue.DeQue<T>();
 
-        if constexpr (std::is_same_v<T, half>) {
-            LocalTensor<float> xf = tmpBuffer.Get<float>();
-            Cast(xf, xLocal, RoundMode::CAST_NONE, length);
-            Mul(xf, xf, xf, length);
-            ReduceSum(xf, xf, xf, length);
-            Cast(zLocal, xf, RoundMode::CAST_NONE, this->ALIGN_NUM);
-        }else{
-            Mul(xLocal, xLocal, xLocal, length);
-            ReduceSum(xLocal, xLocal, xLocal, length);
-            DataCopy(zLocal, xLocal, this->ALIGN_NUM);
-        }
+        Mul(xLocal, xLocal, xLocal, length);
+        Add(sum, xLocal, sum, length);
         
-        // enque the output tensor to VECOUT queue
-        outQueueZ.EnQue<T>(zLocal);
+        SumQueue.EnQue<T>(sum);
         // free input tensors for reuse
         inQueueX.FreeTensor(xLocal);
-    }
-    __aicore__ inline void ComputeFull(int32_t progress, uint32_t length)
-    {
-        // deque input tensors from VECIN queue
-        LocalTensor<T> xLocal = inQueueX.DeQue<T>();
-        LocalTensor<T> zLocal = outQueueZ.AllocTensor<T>();
-
-        if constexpr (std::is_same_v<T, half>) {
-            LocalTensor<float> xf = tmpBuffer.Get<float>();
-            Cast(xf, xLocal, RoundMode::CAST_NONE, length);
-            Mul(xf, xf, xf, length);
-            uint64_t mask = 32 / 4 * 8;
-            uint64_t repeat = (length + mask - 1) / mask;
-            WholeReduceSum<float>(xf, xf, mask, repeat, 1, 1, 8);
-            WholeReduceSum<float>(xf, xf, repeat, 1, 1, 1, 8);
-            Cast(zLocal, xf, RoundMode::CAST_NONE, this->ALIGN_NUM);
-        }else{
-            Mul(xLocal, xLocal, xLocal, length);
-            uint64_t mask = this->ALIGN_NUM * 8;
-            uint64_t repeat = (length + mask - 1) / mask;
-            WholeReduceSum<T>(xLocal, xLocal, mask, repeat, 1, 1, 8);
-            WholeReduceSum<T>(xLocal, xLocal, repeat, 1, 1, 1, 8);
-            DataCopy(zLocal, xLocal, this->ALIGN_NUM);
-        }
-
-        // enque the output tensor to VECOUT queue
-        outQueueZ.EnQue<T>(zLocal);
-        // free input tensors for reuse
-        inQueueX.FreeTensor(xLocal);
-    }
-    __aicore__ inline void CopyOut(int32_t progress)
-    {
-        // deque output tensor from VECOUT queue
-        LocalTensor<T> zLocal = outQueueZ.DeQue<T>();
-        // copy progress_th tile from local tensor to global tensor
-        SetAtomicAdd<T>();
-        DataCopy(zGm, zLocal, this->ALIGN_NUM);
-        SetAtomicNone();
-        // free output tensor for reuse
-        outQueueZ.FreeTensor(zLocal);
     }
 
 private:
     TPipe pipe;
-    TBuf<QuePosition::VECCALC> tmpBuffer;
+    TBuf<QuePosition::VECCALC> castBuffer, tmpBuffer;
     // create queues for input, in this case depth is equal to buffer num
     TQue<QuePosition::VECIN, BUFFER_NUM> inQueueX;
-    // create queue for output, in this case depth is equal to buffer num
-    TQue<QuePosition::VECOUT, BUFFER_NUM> outQueueZ;
+    TQue<QuePosition::VECOUT, 1> SumQueue;
     GlobalTensor<T> xGm;
     GlobalTensor<T> zGm;
     float p;

@@ -28,10 +28,9 @@ static ge::graphStatus TilingFunc(gert::TilingContext* context)
     }else{
         sizeofdatatype = 4;
     }
-    
-    if(dt == ge::DT_FLOAT16) NUM = 16;
 
     auto p = context->GetAttrs()->GetFloat(0);
+    if(*p == 2) NUM = 4;
     tiling.set_p(*p);
     if(*p == 0){
         tiling.set_ptype(1);

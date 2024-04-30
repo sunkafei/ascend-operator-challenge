@@ -28,32 +28,43 @@ public:
         // pipe alloc memory to queue, the unit is Bytes
         pipe.InitBuffer(inQueueX, BUFFER_NUM, this->tileLength * sizeof(DTYPE_Y));
         pipe.InitBuffer(inQueueY, BUFFER_NUM, this->tileLength * sizeof(DTYPE_Y));
-        pipe.InitBuffer(outQueueZ, BUFFER_NUM, this->tileLength * sizeof(DTYPE_Y));
+        pipe.InitBuffer(SumQueue, 1, this->tileLength * sizeof(DTYPE_Y));
         pipe.InitBuffer(tmpBuffer, this->tileLength * sizeof(DTYPE_Y));
     }
     __aicore__ inline void Process()
     {
+        LocalTensor<DTYPE_Y> sum = SumQueue.AllocTensor<DTYPE_Y>();
+        DTYPE_Y zero = 0;
+        Duplicate(sum, zero, this->tileLength);
+        SumQueue.EnQue<DTYPE_Y>(sum);
         if(GetBlockIdx() == 0){
-            LocalTensor<DTYPE_Y> zLocal = outQueueZ.AllocTensor<DTYPE_Y>(); LocalTensor<DTYPE_Y> zLocal2 = outQueueZ.AllocTensor<DTYPE_Y>();
-            DTYPE_Y zero = 0;
-            Duplicate(zLocal, zero, this->ALIGN_NUM);
-            outQueueZ.EnQue<DTYPE_Y>(zLocal); outQueueZ.EnQue<DTYPE_Y>(zLocal2);
-            zLocal = outQueueZ.DeQue<DTYPE_Y>(); zLocal2 = outQueueZ.DeQue<DTYPE_Y>();
-            DataCopy(zGm, zLocal, this->ALIGN_NUM);
-            outQueueZ.FreeTensor(zLocal); outQueueZ.FreeTensor(zLocal2);
+            LocalTensor<DTYPE_Y> sum = SumQueue.DeQue<DTYPE_Y>();
+            DataCopy(zGm, sum, this->ALIGN_NUM);
+            SumQueue.EnQue<DTYPE_Y>(sum);
         }
         // loop count need to be doubled, due to double buffer
         int32_t loopCount = this->tileNum;
         // tiling strategy, pipeline parallel
         for (int32_t i = 0; i < loopCount-1; i++) {
             CopyIn(i, this->tileLength);
-            ComputeFull(i, this->tileLength);
-            CopyOut(i);
+            Compute(i, this->tileLength);
         }
         auto length = this->blockLength - this->tileLength * (loopCount - 1);
         CopyIn(loopCount - 1, length);
-        Compute(loopCount - 1, length);
-        CopyOut(loopCount - 1);
+        Compute(loopCount - 1, length - this->lastpadding);
+
+        {
+            LocalTensor<DTYPE_Y> sum = SumQueue.DeQue<DTYPE_Y>();
+            LocalTensor<DTYPE_Y> tmp = tmpBuffer.Get<DTYPE_Y>();
+            ReduceSum(sum, sum, tmp, this->tileLength);
+            Muls(sum, sum, this->divnum, 1);
+            SumQueue.EnQue<DTYPE_Y>(sum);
+            sum = SumQueue.DeQue<DTYPE_Y>();
+            SetAtomicAdd<DTYPE_Y>();
+            DataCopy(zGm, sum, this->ALIGN_NUM);
+            SetAtomicNone();
+            SumQueue.FreeTensor(sum);
+        }
     }
 
 private:
@@ -63,15 +74,9 @@ private:
         LocalTensor<DTYPE_Y> xLocal = inQueueX.AllocTensor<DTYPE_Y>();
         LocalTensor<DTYPE_Y> yLocal = inQueueY.AllocTensor<DTYPE_Y>();
         // copy progress_th tile from global tensor to local tensor
-        DTYPE_Y zero = 0;
+
         DataCopy(xLocal, xGm[progress * this->tileLength], length);
         DataCopy(yLocal, yGm[progress * this->tileLength], length);
-        /*if(progress + 1 == this->tileNum){
-            for(int i=length-this->lastpadding;i<length;i++){
-                xLocal.SetValue(i, 0);
-                yLocal.SetValue(i, 0);
-            }
-        }*/
         
         // enque input tensors to VECIN queue
         inQueueX.EnQue(xLocal);
@@ -82,56 +87,18 @@ private:
         // deque input tensors from VECIN queue
         LocalTensor<DTYPE_Y> xLocal = inQueueX.DeQue<DTYPE_Y>();
         LocalTensor<DTYPE_Y> yLocal = inQueueY.DeQue<DTYPE_Y>();
-        LocalTensor<DTYPE_Y> zLocal = outQueueZ.AllocTensor<DTYPE_Y>();
-        LocalTensor<DTYPE_Y> tmp = tmpBuffer.Get<DTYPE_Y>();
+        LocalTensor<DTYPE_Y> sum = SumQueue.DeQue<DTYPE_Y>();
 
         Sub(yLocal, xLocal, yLocal, length);
         Mul(yLocal, yLocal, yLocal, length);
-        ReduceSum(zLocal, yLocal, tmp, length);
-        Muls(zLocal, zLocal, this->divnum, this->ALIGN_NUM);
+        Add(sum, sum, yLocal, length);
 
 
         // enque the output tensor to VECOUT queue
-        outQueueZ.EnQue<DTYPE_Y>(zLocal);
+        SumQueue.EnQue<DTYPE_Y>(sum);
         // free input tensors for reuse
         inQueueX.FreeTensor(xLocal);
         inQueueY.FreeTensor(yLocal);
-    }
-    __aicore__ inline void ComputeFull(int32_t progress, uint32_t length)
-    {
-        // deque input tensors from VECIN queue
-        LocalTensor<DTYPE_Y> xLocal = inQueueX.DeQue<DTYPE_Y>();
-        LocalTensor<DTYPE_Y> yLocal = inQueueY.DeQue<DTYPE_Y>();
-        LocalTensor<DTYPE_Y> zLocal = outQueueZ.AllocTensor<DTYPE_Y>();
-        LocalTensor<DTYPE_Y> tmp = tmpBuffer.Get<DTYPE_Y>();
-
-        Sub(yLocal, xLocal, yLocal, length);
-        Mul(yLocal, yLocal, yLocal, length);
-        // ReduceSum(zLocal, yLocal, tmp, length);
-        uint64_t mask = this->ALIGN_NUM * 8;
-        uint64_t repeat = (length + mask - 1) / mask;
-        WholeReduceSum<DTYPE_Y>(zLocal, yLocal, mask, repeat, 1, 1, 8);
-        WholeReduceSum<DTYPE_Y>(zLocal, zLocal, repeat, 1, 1, 1, 8);
-
-        Muls(zLocal, zLocal, this->divnum, this->ALIGN_NUM);
-
-
-        // enque the output tensor to VECOUT queue
-        outQueueZ.EnQue<DTYPE_Y>(zLocal);
-        // free input tensors for reuse
-        inQueueX.FreeTensor(xLocal);
-        inQueueY.FreeTensor(yLocal);
-    }
-    __aicore__ inline void CopyOut(int32_t progress)
-    {
-        // deque output tensor from VECOUT queue
-        LocalTensor<DTYPE_Y> zLocal = outQueueZ.DeQue<DTYPE_Y>();
-        // copy progress_th tile from local tensor to global tensor
-        SetAtomicAdd<DTYPE_Y>();
-        DataCopy(zGm, zLocal, this->ALIGN_NUM);
-        SetAtomicNone();
-        // free output tensor for reuse
-        outQueueZ.FreeTensor(zLocal);
     }
 
 private:
@@ -140,7 +107,7 @@ private:
     // create queues for input, in this case depth is equal to buffer num
     TQue<QuePosition::VECIN, BUFFER_NUM> inQueueX, inQueueY;
     // create queue for output, in this case depth is equal to buffer num
-    TQue<QuePosition::VECOUT, BUFFER_NUM> outQueueZ;
+    TQue<QuePosition::VECOUT, 1> SumQueue;
     GlobalTensor<DTYPE_Y> xGm;
     GlobalTensor<DTYPE_Y> yGm;
     GlobalTensor<DTYPE_Y> zGm;

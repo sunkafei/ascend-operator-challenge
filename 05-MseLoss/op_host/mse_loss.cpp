@@ -9,7 +9,7 @@ const uint32_t BLOCK_SIZE = 32;
 static ge::graphStatus TilingFunc(gert::TilingContext* context)
 {
     MseLossTilingData tiling;
-    constexpr int32_t NUM = 8;
+    constexpr int32_t NUM = 6;
     uint32_t sizeofdatatype;
     uint32_t totalLengthAligned;
     auto ascendcPlatform = platform_ascendc::PlatformAscendC(context->GetPlatformInfo());

@@ -40,9 +40,15 @@ static ge::graphStatus TilingFunc(gert::TilingContext* context)
     }else{
         tiling.set_ptype(0);
     }
+
+    auto outshape = context->GetOutputShape(0)->GetOriginShape();
+    uint32_t d = 1;
+    for(int i=0;i<outshape.GetDimNum();i++){
+        d *= outshape.GetDim(i);
+    }
     
     auto axes = context->GetAttrs()->GetListInt(1);
-    if(axes->GetSize()){
+    if(axes->GetSize() && d != 1){
         context->SetTilingKey(2);
         uint32_t reduce[10] = {0};
         uint32_t shape[10] = {0};

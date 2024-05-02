@@ -12,6 +12,9 @@ BEGIN_TILING_DATA_DEF(LpNormV2TilingData)
   TILING_DATA_FIELD_DEF(uint32_t, core_size);
   TILING_DATA_FIELD_DEF(uint32_t, core_remain);
   TILING_DATA_FIELD_DEF(uint32_t, ptype);
+  TILING_DATA_FIELD_DEF_ARR(uint32_t, 10, shape);
+  TILING_DATA_FIELD_DEF_ARR(uint32_t, 10, reduce);
+  TILING_DATA_FIELD_DEF(uint32_t, dim);
   TILING_DATA_FIELD_DEF(float, p);
 END_TILING_DATA_DEF;
 

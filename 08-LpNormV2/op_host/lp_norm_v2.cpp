@@ -30,7 +30,6 @@ static ge::graphStatus TilingFunc(gert::TilingContext* context)
     }
 
     auto p = context->GetAttrs()->GetFloat(0);
-    if(*p == 2) NUM = 4;
     tiling.set_p(*p);
     if(*p == 0){
         tiling.set_ptype(1);
@@ -40,6 +39,26 @@ static ge::graphStatus TilingFunc(gert::TilingContext* context)
         tiling.set_ptype(3);
     }else{
         tiling.set_ptype(0);
+    }
+    
+    auto axes = context->GetAttrs()->GetListInt(1);
+    if(axes->GetSize()){
+        context->SetTilingKey(2);
+        uint32_t reduce[10] = {0};
+        uint32_t shape[10] = {0};
+        for(int i=0;i<axes->GetSize();i++){
+            reduce[*(axes->GetData() + i)] = 1;
+        }
+        const gert::Shape vec = context->GetInputShape(0)->GetOriginShape();
+        for(int i=0;i<vec.GetDimNum();i++){
+            shape[i] = vec.GetDim(i);
+        }
+        tiling.set_shape(shape);
+        tiling.set_reduce(reduce);
+        tiling.set_dim(vec.GetDimNum());
+    }else{
+        if(*p == 2) NUM = 4;
+        context->SetTilingKey(1);
     }
 
     uint32_t ALIGN_NUM = BLOCK_SIZE / sizeofdatatype;

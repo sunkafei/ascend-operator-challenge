@@ -8,14 +8,6 @@ static ge::graphStatus TilingFunc(gert::TilingContext* context) {
     CrossTilingData tiling;
     int64_t numshapes = context->GetInputShape(0)->GetStorageShape().GetDimNum();
     tiling.set_numshapes(numshapes);
-    int64_t dim = *context->GetAttrs()->GetInt(0);
-    if (dim < 0) {
-        dim = numshapes + dim;
-    }
-    if (dim < 0) {
-        dim = numshapes - 1;
-    }
-    tiling.set_dim(dim);
     int64_t shape[128];
     for (int k = 0; k < 2; ++k) {
         int64_t *ss = &shape[k * 64];
@@ -25,6 +17,19 @@ static ge::graphStatus TilingFunc(gert::TilingContext* context) {
         }
     }
     tiling.set_shape(shape);
+    int64_t dim = *context->GetAttrs()->GetInt(0);
+    if (dim < 0) {
+        dim = numshapes + dim;
+    }
+    if (dim < 0) {
+        for (int i = 0; i < numshapes; ++i) {
+            if (shape[i] == 3 && shape[i + 64] == 3) {
+                dim = i;
+                break;
+            }
+        }
+    }
+    tiling.set_dim(dim);
     std::cout << "dim: " << dim << std::endl;
     std::cout << "numshapes: " << numshapes << std::endl;
     std::cout << "shape[0]: " << shape[0] << " " << shape[1] << std::endl;

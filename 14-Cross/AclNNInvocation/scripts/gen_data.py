@@ -6,12 +6,12 @@ import torch
 import os
 
 def gen_golden_data_simple():
-    x1_tensor = np.random.uniform(-1e9, 1e9, [4, 1, 6, 3, 7, 8, 3]).astype(np.int8)
-    x2_tensor = np.random.uniform(-1e9, 1e9, [1, 5, 6, 3, 7, 1, 3]).astype(np.int8)
+    x1_tensor = np.random.uniform(-1e9, 1e9, [4, 3, 6, 5, 7, 8, 3]).astype(np.int8)
+    x2_tensor = np.random.uniform(-1e9, 1e9, [1, 3, 1, 1, 1, 1, 1]).astype(np.int8)
     x1 = torch.from_numpy(x1_tensor)
     x2 = torch.from_numpy(x2_tensor)
-    dim = -1
-    res_tensor = torch.cross(x1,x2 , dim=dim)
+    dim = 1
+    res_tensor = torch.cross(x1,x2)# , dim=dim)
     golden = res_tensor.numpy().astype(np.int8)
 
     os.system("mkdir -p input")

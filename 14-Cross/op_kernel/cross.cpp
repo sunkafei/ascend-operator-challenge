@@ -44,13 +44,14 @@ public:
                 }
             }
         }
-        for (int i = 0; i < 2; ++i) {
-            if (batchSize[i] > maxbatchSize)
-                maxbatchSize = batchSize[i];
-            if (stepSize[i] > maxstepSize)
-                maxstepSize = stepSize[i];
-            if (totalSize[i] > maxtotalSize)
-                maxtotalSize = totalSize[i];
+        for (int j = 0; j < numshapes; ++j) {
+            maxtotalSize *= outshape[j];
+            if (j < dim) {
+                maxbatchSize *= outshape[j];
+            }
+            if (j > dim) {
+                maxstepSize *= outshape[j];
+            }
         }
     }
     __aicore__ inline void Process() {
@@ -80,7 +81,7 @@ private:
     int64_t numshapes;
     int64_t dim;
     int64_t outshape[64] = {};
-    int64_t maxtotalSize = 0, maxbatchSize = 0, maxstepSize = 0;
+    int64_t maxtotalSize = 1, maxbatchSize = 1, maxstepSize = 1;
     int64_t totalSize[3] = { 1, 1, 1 }, batchSize[3] = { 1, 1, 1 }, stepSize[3] = { 1, 1, 1 };
 };
 extern "C" __global__ __aicore__ void cross(GM_ADDR x1, GM_ADDR x2, GM_ADDR y, GM_ADDR workspace, GM_ADDR tiling) {

@@ -25,7 +25,7 @@ OperatorDesc CreateOpDesc()
 {
     // define operator
     std::vector<int64_t> shape1 { 4, 1, 6, 3, 7, 8, 2 };
-    std::vector<int64_t> shape2 { 4, 5, 6, 3, 7, 1, 2 };
+    std::vector<int64_t> shape2 { 1, 5, 6, 3, 7, 1, 2 };
     std::vector<int64_t> shape3 { 4, 5, 6, 3, 7, 8, 2 };
     aclDataType dataType = ACL_FLOAT16;
     aclFormat format = ACL_FORMAT_ND;

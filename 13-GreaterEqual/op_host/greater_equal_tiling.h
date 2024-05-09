@@ -11,6 +11,10 @@ BEGIN_TILING_DATA_DEF(GreaterEqualTilingData)
   TILING_DATA_FIELD_DEF(uint32_t, aivNum);
   TILING_DATA_FIELD_DEF(uint32_t, core_size);
   TILING_DATA_FIELD_DEF(uint32_t, core_remain);
+  TILING_DATA_FIELD_DEF_ARR(uint32_t, 20, shape);
+  TILING_DATA_FIELD_DEF_ARR(uint32_t, 20, reduce1);
+  TILING_DATA_FIELD_DEF_ARR(uint32_t, 20, reduce2);
+  TILING_DATA_FIELD_DEF(uint32_t, dim);
 END_TILING_DATA_DEF;
 
 REGISTER_TILING_DATA_CLASS(GreaterEqual, GreaterEqualTilingData)

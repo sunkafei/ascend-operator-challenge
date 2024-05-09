@@ -2,9 +2,10 @@
 #include "greater_equal_tiling.h"
 #include "register/op_def_registry.h"
 #include "tiling/platform/platform_ascendc.h"
+#include <iostream>
 
 namespace optiling {
-const uint32_t BLOCK_SIZE = 32;
+const uint32_t BLOCK_SIZE = 256;
 static ge::graphStatus TilingFunc(gert::TilingContext* context) {
     GreaterEqualTilingData tiling;
     int32_t NUM = 24;
@@ -32,6 +33,51 @@ static ge::graphStatus TilingFunc(gert::TilingContext* context) {
     else{ //DT_FLOAT
         sizeofdatatype = 4;
         NUM = 9;
+    }
+
+    auto inshape1 = context->GetInputShape(0)->GetOriginShape();
+    auto inshape2 = context->GetInputShape(1)->GetOriginShape();
+    auto outshape = context->GetOutputShape(0)->GetOriginShape();
+    bool flag = false;
+    for(int i=0;i<outshape.GetDimNum();i++){
+        if(inshape1.GetDim(i) != inshape2.GetDim(i)) flag = true;
+    }
+    
+    auto axes = context->GetAttrs()->GetListInt(1);
+    if(flag){
+        context->SetTilingKey(2);
+        uint32_t reduce1[20] = {0};
+        uint32_t reduce2[20] = {0};
+        uint32_t shape[20] = {0};
+        uint32_t d = 1;
+        for(int i=0;i<outshape.GetDimNum();i++){
+            shape[i] = outshape.GetDim(i);
+            d *= outshape.GetDim(i);
+            if(inshape1.GetDim(i) != outshape.GetDim(i)) reduce1[i] = 1;
+            if(inshape2.GetDim(i) != outshape.GetDim(i)) reduce2[i] = 1;
+        }
+        uint32_t dim = outshape.GetDimNum();
+        for(int i=dim-1;i>=1;i--){
+            if(!reduce1[i - 1] && !reduce2[i - 1] && !reduce1[i] && !reduce2[i]){
+                dim--;
+                shape[i - 1] *= shape[i];
+            }else{
+                break;
+            }
+        }
+        if(reduce1[dim - 1] || reduce2[dim - 1]){
+            shape[dim] = 1;
+            dim++;
+        }
+
+        tiling.set_shape(shape);
+        tiling.set_reduce1(reduce1);
+        tiling.set_reduce2(reduce2);
+        tiling.set_dim(dim);
+        aivNum = 1;
+        totalLength = d;
+    }else{
+        context->SetTilingKey(1);
     }
 
     uint32_t ALIGN_NUM = BLOCK_SIZE / sizeofdatatype;

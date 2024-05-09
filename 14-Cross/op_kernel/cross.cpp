@@ -2,6 +2,13 @@
 #include <type_traits>
 using namespace AscendC;
 constexpr int32_t BUFFER_NUM = 2;
+template<typename T> struct map {
+    using type = float;
+};
+template<> struct map<int32_t> {
+    using type = int32_t;
+};
+
 template<typename T> class KernelCross {
 public:
     __aicore__ inline KernelCross() {}
@@ -55,17 +62,18 @@ public:
         }
     }
     __aicore__ inline void Process() {
+        using F = typename map<T>::type;
         for (int64_t i = 0; i < maxbatchSize; ++i) {
             for (int64_t j = 0; j < maxstepSize; ++j) {
                 auto index1 = i * 3 * maxstepSize + 0 * maxstepSize + j;
                 auto index2 = i * 3 * maxstepSize + 1 * maxstepSize + j;
                 auto index3 = i * 3 * maxstepSize + 2 * maxstepSize + j;
-                float a1 = Gm_x1.GetValue(get_index(index1, 0));
-                float a2 = Gm_x1.GetValue(get_index(index2, 0));
-                float a3 = Gm_x1.GetValue(get_index(index3, 0));
-                float b1 = Gm_x2.GetValue(get_index(index1, 1));
-                float b2 = Gm_x2.GetValue(get_index(index2, 1));
-                float b3 = Gm_x2.GetValue(get_index(index3, 1));
+                F a1 = Gm_x1.GetValue(get_index(index1, 0));
+                F a2 = Gm_x1.GetValue(get_index(index2, 0));
+                F a3 = Gm_x1.GetValue(get_index(index3, 0));
+                F b1 = Gm_x2.GetValue(get_index(index1, 1));
+                F b2 = Gm_x2.GetValue(get_index(index2, 1));
+                F b3 = Gm_x2.GetValue(get_index(index3, 1));
                 auto result1 = a2 * b3 - a3 * b2;
                 auto result2 = a3 * b1 - a1 * b3;
                 auto result3 = a1 * b2 - a2 * b1;

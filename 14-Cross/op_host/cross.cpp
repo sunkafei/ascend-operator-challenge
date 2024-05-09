@@ -9,7 +9,7 @@ static ge::graphStatus TilingFunc(gert::TilingContext* context) {
     int64_t dim = *context->GetAttrs()->GetInt(0);
     tiling.set_dim(dim);
     int64_t numshapes = context->GetInputShape(0)->GetStorageShape().GetDimNum();
-    tiling.set_numshapes(dim);
+    tiling.set_numshapes(numshapes);
     int64_t shape[128];
     for (int k = 0; k < 2; ++k) {
         int64_t *ss = &shape[k * 64];

@@ -1,11 +1,11 @@
 import numpy as np
 import torch
 import os
-x1 = np.random.uniform(-10, 10, [4, 1, 6, 3, 7, 8, 2]).astype(np.float32)
-x2 = np.random.uniform(-10, 10, [4, 5, 6, 3, 7, 1, 2]).astype(np.float32)
+x1 = np.random.uniform(-10, 10, [1024,4,3]).astype(np.float32)
+x2 = np.random.uniform(-10, 10, [1,4,3]).astype(np.float32)
 x1 = torch.tensor(x1)
 x2 = torch.tensor(x2)
-dim = 3
+dim = 2
 res = torch.cross(x1,x2,dim=dim)
 x1 = x1.numpy().astype(np.float32).flatten()
 x2 = x2.numpy().astype(np.float32).flatten()

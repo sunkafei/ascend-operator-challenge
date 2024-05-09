@@ -25,7 +25,7 @@ public:
         }
         this->numshapes = numshapes;
         this->dim = dim;
-        
+
         for (int i = 0; i < 2; ++i) {
             for (int j = 0; j < numshapes; ++j) {
                 if (shape[i][j] > outshape[j]) {
@@ -59,12 +59,12 @@ public:
                 auto index1 = i * 3 * maxstepSize + 0 * maxstepSize + j;
                 auto index2 = i * 3 * maxstepSize + 1 * maxstepSize + j;
                 auto index3 = i * 3 * maxstepSize + 2 * maxstepSize + j;
-                float a1 = Gm_x1.GetValue(index1);
-                float a2 = Gm_x1.GetValue(index2);
-                float a3 = Gm_x1.GetValue(index3);
-                float b1 = Gm_x2.GetValue(index1);
-                float b2 = Gm_x2.GetValue(index2);
-                float b3 = Gm_x2.GetValue(index3);
+                float a1 = Gm_x1.GetValue(get_index(index1, 0));
+                float a2 = Gm_x1.GetValue(get_index(index2, 0));
+                float a3 = Gm_x1.GetValue(get_index(index3, 0));
+                float b1 = Gm_x2.GetValue(get_index(index1, 1));
+                float b2 = Gm_x2.GetValue(get_index(index2, 1));
+                float b3 = Gm_x2.GetValue(get_index(index3, 1));
                 auto result1 = a2 * b3 - a3 * b2;
                 auto result2 = a3 * b1 - a1 * b3;
                 auto result3 = a1 * b2 - a2 * b1;

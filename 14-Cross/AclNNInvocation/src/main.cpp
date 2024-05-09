@@ -24,14 +24,14 @@ int deviceId = 0;
 OperatorDesc CreateOpDesc()
 {
     // define operator
-    std::vector<int64_t> shape1 { 1024,4,3 };
-    std::vector<int64_t> shape2 { 1,4,3 };
-    std::vector<int64_t> shape3 { 1024,4,3 };
+    std::vector<int64_t> shape1 { 4, 1, 6, 3, 7, 8, 2 };
+    std::vector<int64_t> shape2 { 4, 5, 6, 3, 7, 1, 2 };
+    std::vector<int64_t> shape3 { 4, 5, 6, 3, 7, 8, 2 };
     aclDataType dataType = ACL_FLOAT16;
     aclFormat format = ACL_FORMAT_ND;
     OperatorDesc opDesc;
 
-    opDesc.attrDim = 2;
+    opDesc.attrDim = 3;
     opDesc.AddInputTensorDesc(dataType, shape1.size(), shape1.data(), format);
     opDesc.AddInputTensorDesc(dataType, shape2.size(), shape2.data(), format);
     opDesc.AddOutputTensorDesc(dataType, shape3.size(), shape3.data(), format);

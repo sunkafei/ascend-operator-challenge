@@ -1,6 +1,7 @@
 #!/bin/bash
 
 # 先安装
+chmod +x ../build_out/custom_opp_ubuntu_aarch64.run
 ../build_out/custom_opp_ubuntu_aarch64.run
 
 

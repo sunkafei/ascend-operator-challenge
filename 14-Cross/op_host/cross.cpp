@@ -6,24 +6,28 @@
 namespace optiling {
 static ge::graphStatus TilingFunc(gert::TilingContext* context) {
     CrossTilingData tiling;
-    const gert::StorageShape* shape = context->GetInputShape(0);
     int64_t dim = *context->GetAttrs()->GetInt(0);
-    uint64_t totalSize = 1, batchSize = 1, stepSize = 1;
-    for (int i = 0; i < shape->GetStorageShape().GetDimNum(); i++) {
-        totalSize *= shape->GetStorageShape().GetDim(i);
-        if (i < dim) {
-            batchSize *= shape->GetStorageShape().GetDim(i);
-        }
-        if (i > dim) {
-            stepSize *= shape->GetStorageShape().GetDim(i);
+    uint64_t totalSize[3] = {1, 1, 1};
+    uint64_t batchSize[3] = {1, 1, 1};
+    uint64_t stepSize[3] = {1, 1, 1};
+    for (int k = 0; k < 2; ++k) {
+        const gert::StorageShape* shape = context->GetInputShape(k);
+        for (int i = 0; i < shape->GetStorageShape().GetDimNum(); i++) {
+            totalSize[k] *= shape->GetStorageShape().GetDim(i);
+            if (i < dim) {
+                batchSize[k] *= shape->GetStorageShape().GetDim(i);
+            }
+            if (i > dim) {
+                stepSize[k] *= shape->GetStorageShape().GetDim(i);
+            }
         }
     }
     tiling.set_totalSize(totalSize);
     tiling.set_batchSize(batchSize);
     tiling.set_stepSize(stepSize);
-    std::cout << "totalSize: " << totalSize << std::endl;
-    std::cout << "batchSize: " << batchSize << std::endl;
-    std::cout << "stepSize: " << stepSize << std::endl;
+    std::cout << "totalSize: " << totalSize[0] << ", " << totalSize[1] << std::endl;
+    std::cout << "batchSize: " << batchSize[0] << ", " << batchSize[1] << std::endl;
+    std::cout << "stepSize: " << stepSize[0] << ", " << stepSize[1] << std::endl;
 
     context->SetBlockDim(1);
     tiling.SaveToBuffer(context->GetRawTilingData()->GetData(), context->GetRawTilingData()->GetCapacity());

@@ -55,7 +55,7 @@ public:
         uint32_t length = this->blockLength - this->tileLength * (loopCount - 1);
         CopyIn(loopCount - 1, length);
         Compute(loopCount - 1, length);
-        CopyOut(loopCount - 1, length);
+        CopyOut(loopCount - 1, (length + 31) / 32 * 32);
     }
 private:
     __aicore__ inline void CopyIn(int32_t progress, uint32_t length) {

@@ -55,7 +55,7 @@ public:
         uint32_t length = this->blockLength - this->tileLength * (loopCount - 1);
         CopyIn(loopCount - 1, length);
         Compute(loopCount - 1, length);
-        CopyOut(loopCount - 1, length);
+        CopyOut(loopCount - 1, (length + 31) / 32 * 32);
     }
 private:
     __aicore__ inline void CopyIn(int32_t progress, uint32_t length) {
@@ -237,7 +237,7 @@ public:
             auto length_align = (length + this->ALIGN_NUM - 1) / this->ALIGN_NUM * this->ALIGN_NUM;
             CopyIn(start1 * totalLength, start2 * totalLength, loopCount - 1, length_align);
             Compute(loopCount - 1, length);
-            CopyOut(j * totalLength, loopCount - 1, length_align);
+            CopyOut(j * totalLength, loopCount - 1, (length + 31) / 32 * 32);
         }
         
         

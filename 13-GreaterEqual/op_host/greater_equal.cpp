@@ -5,7 +5,7 @@
 #include <iostream>
 
 namespace optiling {
-const uint32_t BLOCK_SIZE = 256;
+const uint32_t BLOCK_SIZE = 32;
 static ge::graphStatus TilingFunc(gert::TilingContext* context) {
     GreaterEqualTilingData tiling;
     int32_t NUM = 24;
